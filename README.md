@@ -1,3 +1,11 @@
+CocoPy
+====== 
+[![PyPi Status](https://img.shields.io/pypi/v/CocoPy.svg)](https://pypi.python.org/pypi/CocoPy)
+[![TravisCI Build Status](https://travis-ci.org/KOLANICH/CocoPy.svg?branch=master)](https://travis-ci.org/KOLANICH/CoCoPy)
+[![Libraries.io Status](https://img.shields.io/librariesio/github/KOLANICH/CoCoPy.svg)](https://libraries.io/github/KOLANICH/CoCoPy)
+[![Gitter.im](https://badges.gitter.im/CoCoPy/Lobby.svg)](https://gitter.im/CoCoPy/Lobby)
+![License](https://img.shields.io/github/license/KOLANICH/CoCoPy.svg)
+
 Coco/R (http://ssw.jku.at/coco/) is a compiler generator, which takes an
 attributed grammar of a source language and generates a scanner and a parser
 for this language. The scanner works as a deterministic finite automaton.
@@ -25,6 +33,7 @@ CONTENTS OF THIS DISTRIBUTION
 
 This distribution of Coco includes the following:
 
+```
    Coco root directory
 
       The application files
@@ -96,7 +105,7 @@ This distribution of Coco includes the following:
       the following:
 
          >>> python cocopTester.py
-
+```
 
 ROADMAP
 
