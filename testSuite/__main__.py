@@ -38,8 +38,7 @@ class CocoTester(object):
             @classmethod
             def setUpClass(cls):
                 print('Running test: %s' % name)
-                args = ['python3', '-m', self._compiler, '-agfjs', '-O', tmpDir, testFileName]
-                print(' '.join(args))
+                args = ['python', '-m', self._compiler, '-agfjs', '-O', tmpDir, testFileName]
                 with subprocess.Popen(args, shell=False, stdout=subprocess.PIPE) as proc:
                     proc.wait()
                     __class__.output = io.TextIOWrapper(proc.stdout).read()
