@@ -104,7 +104,7 @@ suite = [
 ]
 
 
-def test_suite(suite):
+def test_suite():
     return CocoTester('Coco', 'py', suite)()
 
 
