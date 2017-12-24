@@ -1,11 +1,10 @@
 import os
+import sys
 import io
-import traceback
-import shutil
 import unittest
 import subprocess
 
-from .util import *
+from .util import assertFilesEqual, deleteFiles
 
 TARGET = ''
 NEEDS  = [ ]
@@ -36,13 +35,13 @@ class CocoTester( object ):
       class Test(unittest.TestCase):
          maxDiff=None
          def setUpClass():
-            print('Running test: '+name)
+            print(" ".join(('Running test:', name)))
             with subprocess.Popen(
                [
-                  "python",
-                  "-m", self._compiler, "-i", '-O', tmpDir, testFileName
+                  "python3",
+                  "-m", self._compiler, "-agfjs", '-O', tmpDir, testFileName
                ],
-               shell=True,
+               shell=False,
                stdout=subprocess.PIPE
             ) as proc:
                proc.wait()
@@ -50,7 +49,7 @@ class CocoTester( object ):
             os.makedirs(tmpDir, exist_ok=True)
          
          def testTrace(tself):
-            assertFilesEqual(tself, traceResFileName, traceFileName)
+            assertFilesEqual(tself, traceFileName, traceResFileName)
          
          def testOutput(tself):
             with open(outputFileName, "rt", encoding="utf-8") as f:
@@ -74,8 +73,15 @@ class CocoTester( object ):
    def __call__(self):
       loader = unittest.TestLoader()
       runner = unittest.TextTestRunner()
+      suite = unittest.TestSuite()
+
       for testClass in self.generateTests():
-         runner.run(loader.loadTestsFromTestCase(testClass))
+         testCase = loader.loadTestsFromTestCase(testClass)
+         suite.addTest(testCase)
+
+      result = runner.run(suite)
+      sys.exit(not result.wasSuccessful())
+
 
 suite = [
    ( 'TestAlts',           False ),
