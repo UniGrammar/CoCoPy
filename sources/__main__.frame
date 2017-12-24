@@ -113,6 +113,9 @@ class CocoCli(CocoArgs):
       if Errors.count != 0:
          return 1
 
+def main()
+   return CocoCli.run()
+
 if __name__=="__main__":
-   CocoCli.run()
+   main()
 $$$

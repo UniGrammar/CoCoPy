@@ -86,7 +86,7 @@ def moveFilesTo( destDir, *paths ):
    '''Move the files named by paths to dirname.  Overwrite existing files.'''
    paths = splitLists( *paths )
 
-   MakeDir( destDir )
+   makeDirs(destDir)
 
    for name in expandGlobList( paths ):
       base = os.path.basename( name )

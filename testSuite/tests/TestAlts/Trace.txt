@@ -72,10 +72,10 @@ Symbol Table:
 
 Literal Tokens:
 --------------
-_f = "f".
-_d = "d".
-_e = "e".
+_a = "a".
 _b = "b".
 _c = "c".
-_a = "a".
+_d = "d".
+_e = "e".
+_f = "f".
 

@@ -1,4 +1,3 @@
-
 file Test.atg : (17, 3) tokens B2 and B1 cannot be distinguished
 file Test.atg : (19, 3) tokens C2 and C1 cannot be distinguished
 file Test.atg : (21, 3) tokens S2 and S1 cannot be distinguished
