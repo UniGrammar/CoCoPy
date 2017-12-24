@@ -1,6 +1,4 @@
 import os
-import sys
-import io
 import unittest
 import subprocess
 
@@ -40,8 +38,7 @@ class CocoTester(object):
                 print('Running test: %s' % name)
                 args = ['python', '-m', self._compiler, '-agfjs', '-O', tmpDir, testFileName]
                 with subprocess.Popen(args, shell=False, stdout=subprocess.PIPE) as proc:
-                    proc.wait()
-                    __class__.output = io.TextIOWrapper(proc.stdout).read()
+                    cls.output = proc.communicate()[0].decode("utf-8")
                 os.makedirs(tmpDir, exist_ok=True)
 
             def testTrace(tself):
@@ -50,7 +47,7 @@ class CocoTester(object):
             def testOutput(tself):
                 with open(outputFileName, "rt", encoding="utf-8") as f:
                     referenceOuput = f.read()
-                tself.assertEqual(__class__.output, referenceOuput)
+                tself.assertEqual(tself.output, referenceOuput)
 
             if not isErrorTest:
                 def testGeneratedCode(tself):
@@ -59,7 +56,7 @@ class CocoTester(object):
 
             @classmethod
             def tearDownClass(cls):
-                deleteFiles('*.py.old', 'Parser.py', 'Scanner.py', scannerResFileName)
+                deleteFiles(tmpDir+'/*.*')
 
         return Test
 
@@ -71,42 +68,45 @@ class CocoTester(object):
 
     def __call__(self):
         loader = unittest.TestLoader()
-        runner = unittest.TextTestRunner()
         suite = unittest.TestSuite()
 
         for testClass in self.generateTests():
             testcase = loader.loadTestsFromTestCase(testClass)
             suite.addTest(testcase)
 
-        result = runner.run(suite)
-        sys.exit(not result.wasSuccessful())
+        return suite
 
 
 suite = [
-     ( 'TestAlts',           False ),
-     ( 'TestOpts',           False ),
-     ( 'TestOpts1',          False ),
-     ( 'TestIters',          False ),
-     ( 'TestEps',            False ),
-     ( 'TestAny',            False ),
-     ( 'TestAny1',           False ),
-     ( 'TestSync',           False ),
-#    ( 'TestSem',            False ),  # FIXME
-     ( 'TestWeak',           False ),
-     ( 'TestChars',          False ),
-     ( 'TestTokens',         False ),
-     ( 'TestTokens1',        True  ),
-     ( 'TestComments',       False ),
-     ( 'TestDel',            False ),
-     ( 'TestTerminalizable', True  ),
-     ( 'TestComplete',       True  ),
-     ( 'TestReached',        True  ),
-     ( 'TestCircular',       True  ),
-     ( 'TestLL1',            False ),
-     ( 'TestResOK',          False ),
-     ( 'TestResIllegal',     True  ),
-     ( 'TestCasing',         False )
+    ( 'TestAlts',           False ),
+    ( 'TestOpts',           False ),
+    ( 'TestOpts1',          False ),
+    ( 'TestIters',          False ),
+    ( 'TestEps',            False ),
+    ( 'TestAny',            False ),
+    ( 'TestAny1',           False ),
+    ( 'TestSync',           False ),
+# #    ( 'TestSem',            False ), #  FIXME
+    ( 'TestWeak',           False ),
+    ( 'TestChars',          False ),
+    ( 'TestTokens',         False ),
+    ( 'TestTokens1',        True  ),
+    ( 'TestComments',       False ),
+    ( 'TestDel',            False ),
+    ( 'TestTerminalizable', True  ),
+    ( 'TestComplete',       True  ),
+    ( 'TestReached',        True  ),
+    ( 'TestCircular',       True  ),
+    ( 'TestLL1',            False ),
+#     ( 'TestResOK',          False ), #  FIXME: add -x to _compiler args. Cross reference list
+#     ( 'TestResIllegal',     True  ), #  FIXME: add -x to _compiler args. Cross reference list
+    ( 'TestCasing',         False )
 ]
 
-tester = CocoTester('Coco', 'py', suite)
-tester()
+
+def test_suite(suite):
+    return CocoTester('Coco', 'py', suite)()
+
+
+if __name__ == '__main__':
+    unittest.main(defaultTest='test_suite')
