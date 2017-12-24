@@ -1,8 +1,8 @@
 __pycache__
 *.pyc
 *.pyo
+.*
 /CocoPy.egg-info
 /build
 /dist
 /.eggs
-/testSuite/tmp
