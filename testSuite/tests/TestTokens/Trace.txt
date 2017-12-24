@@ -111,6 +111,6 @@ Symbol Table:
 
 Literal Tokens:
 --------------
-_hasNul = "ab\0c".
 _nul = "\0".
+_hasNul = "ab\0c".
 

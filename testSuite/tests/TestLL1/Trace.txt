@@ -186,13 +186,13 @@ Symbol Table:
 
 Literal Tokens:
 --------------
-_f = "f".
-_g = "g".
-_d = "d".
-_e = "e".
-_h = "h".
-_i = "i".
+_a = "a".
 _b = "b".
 _c = "c".
-_a = "a".
+_d = "d".
+_e = "e".
+_f = "f".
+_g = "g".
+_h = "h".
+_i = "i".
 
