@@ -13,13 +13,12 @@ class CodeGenerator(object):
 	ls = "\n"
 	indent_unit = "\t"
 
-	sourceDir = None
-	outputDir = None
-	frameDir = None
-
-	def __init__(self) -> None:
+	def __init__(self, sourceDir, outputDir, frameDir) -> None:
 		self._frameFile = None
 		self._outputFile = None
+		self.sourceDir = sourceDir
+		self.outputDir = outputDir
+		self.frameDir = frameDir
 
 	def openFiles(self, frameFileName: str, sourceFileName: str, outputFileName: str, backup: bool = False) -> None:
 		if isinstance(frameFileName, str):
@@ -27,10 +26,10 @@ class CodeGenerator(object):
 
 		self._frameFile = None
 		for frameName in frameFileName:
-			fr = self.__class__.sourceDir / frameName
+			fr = self.sourceDir / frameName
 			if not fr.is_file():
-				if self.__class__.frameDir is not None:
-					fr = self.__class__.frameDir / frameName
+				if self.frameDir is not None:
+					fr = self.frameDir / frameName
 			try:
 				self._frameFile = fr.open("rt", encoding="utf-8")
 				break
@@ -41,7 +40,7 @@ class CodeGenerator(object):
 			raise RuntimeError("-- Compiler Error: Cannot open " + frameFileName[0])
 
 		try:
-			fn = self.__class__.outputDir / outputFileName
+			fn = self.outputDir / outputFileName
 			if backup and fn.is_file():
 				backup = fn.parent / (fn.name + ".old")
 				if backup.is_file():

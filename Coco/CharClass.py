@@ -36,7 +36,7 @@ class CharClass(object):
 
 	charSetSize = 256  # must be a multiple of 16
 
-	def __init__(self, name: str, s: Union[Set[int], Set[Union[int, str]]]) -> None:
+	def __init__(self, name: str, s: Union[Set[int], Set[Union[int, str]]], trace: Trace) -> None:
 		assert isinstance(name, str)
 		assert isinstance(s, set)
 		if name == "#":
@@ -45,6 +45,7 @@ class CharClass(object):
 		self.n = len(__class__.classes)  # class number
 		self.name = name  # class name
 		self.set = s  # set representing the class
+		self.trace = trace
 		self.__class__.classes.append(self)
 
 	@staticmethod
@@ -81,11 +82,11 @@ class CharClass(object):
 	@staticmethod
 	def WriteClasses():
 		for c in __class__.classes:
-			Trace.Write(str(c.name), -10)
-			Trace.Write(": ")
+			self.trace.Write(str(c.name), -10)
+			self.trace.Write(": ")
 			c.WriteSet()
-			Trace.WriteLine()
-		Trace.WriteLine()
+			self.trace.WriteLine()
+		self.trace.WriteLine()
 
 	def WriteSet(self):
 		s = self.set.copy()
@@ -105,6 +106,6 @@ class CharClass(object):
 			while i < mx and (i in s):
 				i += 1
 			if j < (i - 1):
-				Trace.Write(str(self.__class__.Ch(j)) + ".." + str(self.__class__.Ch(i - 1)) + " ")
+				self.trace.Write(str(self.__class__.Ch(j)) + ".." + str(self.__class__.Ch(i - 1)) + " ")
 			else:
-				Trace.Write(str(self.__class__.Ch(j) + " "))
+				self.trace.Write(str(self.__class__.Ch(j) + " "))

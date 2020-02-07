@@ -26,6 +26,7 @@
 #Coco/R itself) does not fall under the GNU General Public License.
 #-------------------------------------------------------------------------*/
 from typing import List, Optional, Set, Union
+from enum import IntEnum
 import os
 from pathlib import Path
 import sys
@@ -58,9 +59,9 @@ class Comment(object):
 		assert isinstance(p, Node)
 		s = ""  # StringBuffer
 		while p is not None:
-			if p.typ == Node.chr:
+			if p.typ == NodeKind.chr:
 				s += chr(p.val)
-			elif p.typ == Node.clas:
+			elif p.typ == NodeKind.clas:
 				st = CharClass.Set(p.val)  # BitSet
 				if len(st) != 1:
 					Errors.SemErr("character set contains more than 1 character")
@@ -116,12 +117,12 @@ class Symbol(object):
 		self.name = name
 		self.line = line
 
-		if typ == Node.t:
+		if typ == NodeKind.t:
 			self.n = len(Symbol.terminals)
 			Symbol.terminals.append(self)
-		elif typ == Node.pr:
+		elif typ == NodeKind.pr:
 			Symbol.pragmas.append(self)
-		elif typ == Node.nt:
+		elif typ == NodeKind.nt:
 			self.n = len(Symbol.nonterminals)
 			Symbol.nonterminals.append(self)
 
@@ -153,10 +154,7 @@ class Target(object):
 		self.next = None  # Target instance
 
 
-class Node(object):
-	nodes = []
-	nTyp = ["\t ", "t   ", "pr  ", "nt  ", "clas", "chr ", "wt  ", "any ", "eps ", "sync", "sem ", "alt ", "iter", "opt ", "rslv"]
-
+class NodeKind(IntEnum):
 	# constants for node kinds
 	t = 1  # terminal symbol
 	pr = 2  # pragma
@@ -172,6 +170,11 @@ class Node(object):
 	iter = 12  # iteration: { }
 	opt = 13  # option: [ ]
 	rslv = 14  # resolver expr  /* ML */ /* AW 03-01-13 renamed slv --> rslv */
+
+
+class Node(object):
+	nodes = []
+	nTyp = ["\t ", "t   ", "pr  ", "nt  ", "clas", "chr ", "wt  ", "any ", "eps ", "sync", "sem ", "alt ", "iter", "opt ", "rslv"]
 
 	normalTrans = 0  # transition codes
 	contextTrans = 1
@@ -234,12 +237,12 @@ class Node(object):
 
 	@staticmethod
 	def DelNode(p: "Node") -> bool:
-		if p.typ == Node.nt:
+		if p.typ == NodeKind.nt:
 			return p.sym.deletable
-		elif p.typ == Node.alt:
+		elif p.typ == NodeKind.alt:
 			return Node.DelAlt(p.sub) or p.down is not None and Node.DelAlt(p.down)
 		else:
-			return p.typ in (Node.eps, Node.iter, Node.opt, Node.sem, Node.sync, Node.rslv)
+			return p.typ in (NodeKind.eps, NodeKind.iter, NodeKind.opt, NodeKind.sem, NodeKind.sync, NodeKind.rslv)
 
 	# ----------------- for printing ----------------------
 
@@ -282,7 +285,7 @@ class Node(object):
 			if p.sym is not None:
 				Trace.Write(Node.Name(p.sym.name), 12)
 				Trace.Write(" ")
-			elif p.typ == Node.clas:
+			elif p.typ == NodeKind.clas:
 				c = CharClass.classes[p.val]
 				Trace.Write(Node.Name(c.name), 12)
 				Trace.Write(" ")
@@ -292,27 +295,27 @@ class Node(object):
 			Trace.Write(str(Node.Ptr(p.next, p.up)), 5)
 			Trace.Write(" ")
 
-			if p.typ in (Node.t, Node.nt, Node.wt):
+			if p.typ in (NodeKind.t, NodeKind.nt, NodeKind.wt):
 				Trace.Write(" \t\t\t\t")
 				Trace.Write(Node.Pos(p.pos), 5)
-			elif p.typ == Node.chr:
+			elif p.typ == NodeKind.chr:
 				Trace.Write(str(p.val), 5)
 				Trace.Write(" ")
 				Trace.Write(str(p.code), 5)
 				Trace.Write(INDENT * 2 + " ")
-			elif p.typ == Node.clas:
+			elif p.typ == NodeKind.clas:
 				Trace.Write(INDENT * 2 + "")
 				Trace.Write(str(p.code), 5)
 				Trace.Write(INDENT * 2 + " ")
-			elif p.typ in (Node.alt, Node.iter, Node.opt):
+			elif p.typ in (NodeKind.alt, NodeKind.iter, NodeKind.opt):
 				Trace.Write(str(Node.Ptr(p.down, False)), 5)
 				Trace.Write(" ")
 				Trace.Write(str(Node.Ptr(p.sub, False)), 5)
 				Trace.Write(INDENT * 2 + " ")
-			elif p.typ == Node.sem:
+			elif p.typ == NodeKind.sem:
 				Trace.Write(INDENT * 4 + " ")
 				Trace.Write(Node.Pos(p.pos), 5)
-			elif p.typ in (Node.eps, Node.any, Node.sync):
+			elif p.typ in (NodeKind.eps, NodeKind.any, NodeKind.sync):
 				Trace.Write(INDENT * 6 + "")
 
 			Trace.WriteLine(str(p.line), 5)
@@ -325,7 +328,7 @@ class State(object):
 
 	lastNr = 0  # highest state number
 
-	def __init__(self) -> None:
+	def __init__(self, dfa) -> None:
 		self.nr = 0  # state number
 		self.firstAction = None  # Action,  to first action of this state
 		self.endOf = None  # Symbol,  recognized token if state is final
@@ -334,6 +337,7 @@ class State(object):
 
 		State.lastNr += 1
 		self.nr = State.lastNr
+		self.dfa = dfa
 
 	def AddAction(self, act: "Action") -> None:
 		assert isinstance(act, Action)
@@ -368,9 +372,9 @@ class State(object):
 			ch = ord(ch)
 		a = self.firstAction
 		while a is not None:
-			if a.typ == Node.chr and ch == a.sym:
+			if a.typ == NodeKind.chr and ch == a.sym:
 				return a
-			elif a.typ == Node.clas:
+			elif a.typ == NodeKind.clas:
 				s = CharClass.Set(a.sym)
 				if ch in s:
 					return a
@@ -382,7 +386,7 @@ class State(object):
 		assert isinstance(s, State)
 		action = s.firstAction
 		while action is not None:
-			a = Action(action.typ, action.sym, action.tc)
+			a = Action(action.typ, action.sym, action.tc, self.dfa)
 			a.AddTargets(action)
 			self.AddAction(a)
 			action = action.next
@@ -391,7 +395,7 @@ class State(object):
 class Action(object):
 	""" action of finite automaton"""
 
-	def __init__(self, typ: int, sym: int, tc: int) -> None:
+	def __init__(self, typ: int, sym: int, tc: int, dfa) -> None:
 		assert isinstance(typ, int)
 		assert isinstance(sym, int)
 		assert isinstance(tc, int)
@@ -400,6 +404,7 @@ class Action(object):
 		self.tc = tc  # transition code: normalTrans, contextTrans
 		self.target = None  # Target    # states reached from this action
 		self.next = None  # Action
+		self.dfa = dfa
 
 	def AddTarget(self, t: Target) -> None:
 		""" add t to the action.targets"""
@@ -429,7 +434,7 @@ class Action(object):
 			self.tc = Node.contextTrans
 
 	def Symbols(self) -> Union[Set[int], Set[Union[int, str]]]:
-		if self.typ == Node.clas:
+		if self.typ == NodeKind.clas:
 			s = copy.copy(CharClass.Set(self.sym))
 		else:
 			s = set()
@@ -438,13 +443,13 @@ class Action(object):
 
 	def ShiftWith(self, s: Set[int]) -> None:
 		if len(s) == 1:
-			self.typ = Node.chr
+			self.typ = NodeKind.chr
 			self.sym = min(s)  # .First()
 		else:
 			c = CharClass.Find(s)
 			if c is None:
-				c = CharClass("#", s)  # class with dummy name
-			self.typ = Node.clas
+				c = CharClass("#", s, self.dfa.trace)  # class with dummy name
+			self.typ = NodeKind.clas
 			self.sym = c.n
 
 	def GetTargetStates(self, param: List[None]) -> bool:
@@ -456,7 +461,7 @@ class Action(object):
 		t = self.target
 		while t is not None:
 			stateNr = t.state.nr  # int
-			if stateNr <= DFA.lastSimState:
+			if stateNr <= self.dfa.lastSimState:
 				targets.add(stateNr)
 			else:
 				try:
@@ -512,9 +517,10 @@ class Melted(object):  # info about melted states
 
 
 class Graph(object):
-	dummyNode = Node(Node.eps, None, 0)
+	dummyNode = Node(NodeKind.eps, None, 0)
 
-	def __init__(self, p: Optional[Node] = None) -> None:
+	def __init__(self, dfa, p: Optional[Node] = None) -> None:
+		self.dfa = dfa
 		assert isinstance(p, Node) or (p is None)
 
 		self.l = p  # Node,  left end of graph = head
@@ -523,7 +529,7 @@ class Graph(object):
 	@staticmethod
 	def MakeFirstAlt(g: "Graph") -> None:
 		assert isinstance(g, Graph)
-		g.l = Node(Node.alt, g.l)
+		g.l = Node(NodeKind.alt, g.l)
 		g.l.line = g.l.sub.line  # make line available for error handling */
 		g.l.next = g.r
 		g.r = g.l
@@ -532,7 +538,7 @@ class Graph(object):
 	def MakeAlternative(g1: "Graph", g2: "Graph") -> None:
 		assert isinstance(g1, Graph)
 		assert isinstance(g2, Graph)
-		g2.l = Node(Node.alt, g2.l)
+		g2.l = Node(NodeKind.alt, g2.l)
 		g2.l.line = g2.l.sub.line
 		p = g1.l
 		while p.down is not None:
@@ -559,7 +565,7 @@ class Graph(object):
 	@staticmethod
 	def MakeIteration(g: "Graph") -> None:
 		assert isinstance(g, Graph)
-		g.l = Node(Node.iter, g.l)
+		g.l = Node(NodeKind.iter, g.l)
 		p = g.r
 		g.r = g.l
 		while p is not None:
@@ -571,7 +577,7 @@ class Graph(object):
 	@staticmethod
 	def MakeOption(g: "Graph") -> None:
 		assert isinstance(g, Graph)
-		g.l = Node(Node.opt, g.l)
+		g.l = Node(NodeKind.opt, g.l)
 		g.l.next = g.r
 		g.r = g.l
 
@@ -588,13 +594,13 @@ class Graph(object):
 	def SetContextTrans(p: Node) -> None:
 		"""set transition code in the graph rooted at p"""
 		assert isinstance(p, Node) or (p is None)
-		DFA.hasCtxMoves = True
+		self.dfa.hasCtxMoves = True
 		while p is not None:
-			if p.typ == Node.chr or p.typ == Node.clas:
+			if p.typ == NodeKind.chr or p.typ == NodeKind.clas:
 				p.code = Node.contextTrans
-			elif p.typ == Node.opt or p.typ == Node.iter:
+			elif p.typ == NodeKind.opt or p.typ == NodeKind.iter:
 				Graph.SetContextTrans(p.sub)
-			elif p.typ == Node.alt:
+			elif p.typ == NodeKind.alt:
 				Graph.SetContextTrans(p.sub)
 				Graph.SetContextTrans(p.down)
 			if p.up:
@@ -604,18 +610,18 @@ class Graph(object):
 	@staticmethod
 	def DeleteNodes() -> None:
 		Node.nodes = []
-		Graph.dummyNode = Node(Node.eps, None, 0)
+		Graph.dummyNode = Node(NodeKind.eps, None, 0)
 
 	@staticmethod
-	def StrToGraph(st: str) -> "Graph":
+	def StrToGraph(st: str, dfa) -> "Graph":
 		assert isinstance(st, str)
 		s = DFA.Unescape(st[1:-1])
 		if len(s) == 0:
 			Errors.SemErr("empty token not allowed")
-		g = Graph()
+		g = Graph(dfa)
 		g.r = Graph.dummyNode
 		for i in range(0, len(s)):
-			p = Node(Node.chr, ord(s[i]), 0)
+			p = Node(NodeKind.chr, ord(s[i]), 0)
 			g.r.next = p
 			g.r = p
 		g.l = Graph.dummyNode.next
@@ -663,19 +669,19 @@ class Tab:
 		fs = set()
 		while (p is not None) and not (p.n in mark):
 			mark.add(p.n)
-			if p.typ == Node.nt:
+			if p.typ == NodeKind.nt:
 				if p.sym.firstReady:
 					fs |= p.sym.first
 				else:
 					fs |= Tab.First0(p.sym.graph, mark)
-			elif p.typ in (Node.t, Node.wt):
+			elif p.typ in (NodeKind.t, NodeKind.wt):
 				fs.add(p.sym.n)
-			elif p.typ == Node.any:
+			elif p.typ == NodeKind.any:
 				fs |= p.set
-			elif p.typ == Node.alt:
+			elif p.typ == NodeKind.alt:
 				fs |= Tab.First0(p.sub, mark)
 				fs |= Tab.First0(p.down, mark)
-			elif p.typ in (Node.iter, Node.opt):
+			elif p.typ in (NodeKind.iter, NodeKind.opt):
 				fs |= Tab.First0(p.sub, mark)
 			if not Node.DelNode(p):
 				break
@@ -712,14 +718,14 @@ class Tab:
 		assert isinstance(Tab.visited, set)
 		while (p is not None) and (p.n not in Tab.visited):
 			Tab.visited.add(p.n)
-			if p.typ == Node.nt:
+			if p.typ == NodeKind.nt:
 				s = Tab.First(p.next)
 				p.sym.follow |= s
 				if Node.DelGraph(p.next):
 					p.sym.nts.add(Tab.curSy.n)
-			elif p.typ == Node.opt or p.typ == Node.iter:
+			elif p.typ == NodeKind.opt or p.typ == NodeKind.iter:
 				Tab.CompFollow(p.sub)
-			elif p.typ == Node.alt:
+			elif p.typ == NodeKind.alt:
 				Tab.CompFollow(p.sub)
 				Tab.CompFollow(p.down)
 			p = p.next
@@ -759,13 +765,13 @@ class Tab:
 		if p is None:
 			return None
 		a = None
-		if p.typ == Node.any:
+		if p.typ == NodeKind.any:
 			a = p
-		elif p.typ == Node.alt:
+		elif p.typ == NodeKind.alt:
 			a = Tab.LeadingAny(p.sub)
 			if a is None:
 				a = Tab.LeadingAny(p.down)
-		elif p.typ == Node.opt or p.typ == Node.iter:
+		elif p.typ == NodeKind.opt or p.typ == NodeKind.iter:
 			a = Tab.LeadingAny(p.sub)
 		elif Node.DelNode(p) and not p.up:
 			a = Tab.LeadingAny(p.next)
@@ -776,12 +782,12 @@ class Tab:
 		"""find ANY sets"""
 		assert isinstance(p, Node) or (p is None)
 		while p is not None:
-			if p.typ == Node.opt or p.typ == Node.iter:
+			if p.typ == NodeKind.opt or p.typ == NodeKind.iter:
 				Tab.FindAS(p.sub)
 				a = Tab.LeadingAny(p.sub)
 				if a is not None:
 					a.set -= Tab.First(p.next)
-			elif p.typ == Node.alt:
+			elif p.typ == NodeKind.alt:
 				s1 = set()
 				q = p
 				while q is not None:
@@ -818,7 +824,7 @@ class Tab:
 	def Expected0(p: Node, curSy: Symbol) -> Set[int]:
 		assert isinstance(p, Node)
 		assert isinstance(curSy, Symbol)
-		if p.typ == Node.rslv:
+		if p.typ == NodeKind.rslv:
 			return set()
 		else:
 			return Tab.Expected(p, curSy)
@@ -828,15 +834,15 @@ class Tab:
 		assert isinstance(p, Node) or (p is None)
 		while (p is not None) and (p.n not in Tab.visited):
 			Tab.visited.add(p.n)
-			if p.typ == Node.sync:
+			if p.typ == NodeKind.sync:
 				s = Tab.Expected(p.next, Tab.curSy)
 				s.add(Tab.eofSy.n)
 				Tab.allSyncSets |= s
 				p.set = s
-			elif p.typ == Node.alt:
+			elif p.typ == NodeKind.alt:
 				Tab.CompSync(p.sub)
 				Tab.CompSync(p.down)
-			elif p.typ == Node.opt or p.typ == Node.iter:
+			elif p.typ == NodeKind.opt or p.typ == NodeKind.iter:
 				Tab.CompSync(p.sub)
 			p = p.next
 
@@ -853,7 +859,7 @@ class Tab:
 	@staticmethod
 	def SetupAnys() -> None:
 		for p in Node.nodes:
-			if p.typ == Node.any:
+			if p.typ == NodeKind.any:
 				p.set = set()
 				for j in range(0, len(Symbol.terminals)):
 					p.set.add(j)
@@ -910,7 +916,7 @@ class Tab:
 			Trace.WriteLine("ANY and SYNC sets:")
 			Trace.WriteLine("-----------------")
 			for p in Node.nodes:
-				if p.typ == Node.any or p.typ == Node.sync:
+				if p.typ == NodeKind.any or p.typ == NodeKind.sync:
 					Trace.Write(str(p.n), 4)
 					Trace.Write(" ")
 					Trace.Write(Node.nTyp[p.typ], 4)
@@ -938,13 +944,13 @@ class Tab:
 		assert isinstance(singles, list)
 		if p is None:
 			return  # end of graph
-		if p.typ == Node.nt:
+		if p.typ == NodeKind.nt:
 			if p.up or Node.DelGraph(p.next):
 				singles.append(p.sym)
-		elif p.typ == Node.alt or p.typ == Node.iter or p.typ == Node.opt:
+		elif p.typ == NodeKind.alt or p.typ == NodeKind.iter or p.typ == NodeKind.opt:
 			if p.up or Node.DelGraph(p.next):
 				Tab.GetSingles(p.sub, singles)
-				if p.typ == Node.alt:
+				if p.typ == NodeKind.alt:
 					Tab.GetSingles(p.down, singles)
 		if (not p.up) and Node.DelNode(p):
 			Tab.GetSingles(p.next, singles)
@@ -1039,7 +1045,7 @@ class Tab:
 	def CheckAlts(p: Node) -> None:
 		assert isinstance(p, Node)
 		while p is not None:
-			if p.typ == Node.alt:
+			if p.typ == NodeKind.alt:
 				q = p
 				s1 = set()
 				while q is not None:  # for all alternatives
@@ -1048,7 +1054,7 @@ class Tab:
 					s1 |= s2
 					Tab.CheckAlts(q.sub)
 					q = q.down
-			elif p.typ == Node.opt or p.typ == Node.iter:
+			elif p.typ == NodeKind.opt or p.typ == NodeKind.iter:
 				if Node.DelSubGraph(p.sub):
 					Tab.LL1Error(4, None)  # e.g. [[...]]
 				else:
@@ -1056,7 +1062,7 @@ class Tab:
 					s2 = Tab.Expected(p.next, Tab.curSy)
 					Tab.CheckOverlap(s1, s2, 2)
 				Tab.CheckAlts(p.sub)
-			elif p.typ == Node.any:
+			elif p.typ == NodeKind.any:
 				if len(p.set) == 0:
 					Tab.LL1Error(3, None)
 				# e.g. {ANY} ANY or [ANY] ANY
@@ -1086,7 +1092,7 @@ class Tab:
 		assert isinstance(p, Node)
 		assert isinstance(rslvAllowed, bool)
 		while p is not None:
-			if p.typ == Node.alt:
+			if p.typ == NodeKind.alt:
 				expected = set()
 				q = p
 				while q is not None:
@@ -1095,7 +1101,7 @@ class Tab:
 				soFar = set()
 				q = p
 				while q is not None:
-					if q.sub.typ == Node.rslv:
+					if q.sub.typ == NodeKind.rslv:
 						fs = Tab.Expected(q.sub.next, Tab.curSy)
 						if fs.intersection(soFar):
 							Tab.ResErr(q.sub, "Resolver will never be evaluated. " "Place it at previous conflicting alternative.")
@@ -1106,14 +1112,14 @@ class Tab:
 					Tab.CheckRes(q.sub, True)
 
 					q = q.down
-			elif p.typ in (Node.iter, Node.opt):
-				if p.sub.typ == Node.rslv:
+			elif p.typ in (NodeKind.iter, NodeKind.opt):
+				if p.sub.typ == NodeKind.rslv:
 					fs = Tab.First(p.sub.next)
 					fsNext = Tab.Expected(p.next, Tab.curSy)
 					if not fs.intersection(fsNext):
 						Tab.ResErr(p.sub, "Misplaced resolver: no LL(1) conflict.")
 				Tab.CheckRes(p.sub, True)
-			elif p.typ == Node.rslv:
+			elif p.typ == NodeKind.rslv:
 				if not rslvAllowed:
 					Tab.ResErr(p, "Misplaced resolver: no alternative.")
 			if p.up:
@@ -1147,12 +1153,12 @@ class Tab:
 	def MarkReachedNts(p: Optional[Node]) -> None:
 		assert isinstance(p, Node) or (p is None)
 		while p is not None:
-			if p.typ == Node.nt and (p.sym.n not in Tab.visited):  # new nt reached
+			if p.typ == NodeKind.nt and (p.sym.n not in Tab.visited):  # new nt reached
 				Tab.visited.add(p.sym.n)
 				Tab.MarkReachedNts(p.sym.graph)
-			elif p.typ == Node.alt or p.typ == Node.iter or p.typ == Node.opt:
+			elif p.typ == NodeKind.alt or p.typ == NodeKind.iter or p.typ == NodeKind.opt:
 				Tab.MarkReachedNts(p.sub)
-				if p.typ == Node.alt:
+				if p.typ == NodeKind.alt:
 					Tab.MarkReachedNts(p.down)
 			if p.up:
 				break
@@ -1179,9 +1185,9 @@ class Tab:
 		assert isinstance(p, Node)
 		assert isinstance(mark, set)
 		while p is not None:
-			if p.typ == Node.nt and (p.sym.n not in mark):
+			if p.typ == NodeKind.nt and (p.sym.n not in mark):
 				return False
-			if p.typ == Node.alt and not Tab.IsTerm(p.sub, mark) and ((p.down is None) or not Tab.IsTerm(p.down, mark)):
+			if p.typ == NodeKind.alt and not Tab.IsTerm(p.sub, mark) and ((p.down is None) or not Tab.IsTerm(p.down, mark)):
 				return False
 			if p.up:
 				break
@@ -1260,7 +1266,7 @@ class Tab:
 			Trace.Write(" false ")
 		else:
 			Trace.Write(" true  ")
-		if sym.typ == Node.nt:
+		if sym.typ == NodeKind.nt:
 			Trace.Write(str(Tab.Num(sym.graph)), 5)
 			if sym.deletable:
 				Trace.Write(" true  ")
@@ -1270,7 +1276,7 @@ class Tab:
 			Trace.Write(INDENT * 4 + "")
 		Trace.Write(str(sym.line), 5)
 		Trace.Write(" " + Tab.tKind[sym.tokenKind].strip())
-		if (sym.typ == Node.pr or sym.typ == Node.t) and (sym.symName is not None):
+		if (sym.typ == NodeKind.pr or sym.typ == NodeKind.t) and (sym.symName is not None):
 			Trace.Write(INDENT + sym.symName)
 		Trace.WriteLine()
 
@@ -1306,7 +1312,7 @@ class Tab:
 
 		# collect lines where symbols have been referenced
 		for n in Node.nodes:
-			if n.typ in (Node.t, Node.wt, Node.nt):
+			if n.typ in (NodeKind.t, NodeKind.wt, NodeKind.nt):
 				if n.sym in tab:
 					lst = tab[n.sym]
 				else:
@@ -1349,7 +1355,7 @@ class Tab:
 				Tab.ddt[code] = True
 
 	def __init__(self) -> None:
-		Tab.eofSy = Symbol(Node.t, "EOF", 0)
+		Tab.eofSy = Symbol(NodeKind.t, "EOF", 0)
 		Tab.literals = {}
 
 	# considerable extension from here on to handle name generation
@@ -1421,18 +1427,16 @@ class DFA(object):
 	srcDir = ""  # directory of attributed grammar file
 	outDir = ""  # directory to put output
 
-	@staticmethod
-	def framRead() -> str:
+	def framRead(self) -> str:
 		try:
-			return __class__.fram.read(1)
+			return self.fram.read(1)
 		except BaseException:
 			raise RuntimeError("-- error reading Scanner.frame")
-		return __class__.EOF
+		return self.EOF
 
 		# ---------- Output primitives
 
-	@staticmethod
-	def Ch(ch):
+	def Ch(self, ch):
 		if isinstance(ch, int):
 			ch = str(ch)
 		if ch < " " or ch >= str(127) or ch == "'" or ch == "\\":
@@ -1446,8 +1450,7 @@ class DFA(object):
 		# else:
 		# return "ord('" + chr(ch) + "')"
 
-	@staticmethod
-	def ReportCh(ch):
+	def ReportCh(self, ch):
 		if isinstance(ch, str):
 			ch = ord(ch)
 		if ch < ord(" ") or ch >= 127 or ch == ord("'") or ch == ord("\\"):
@@ -1455,8 +1458,7 @@ class DFA(object):
 		else:
 			return "".join(["'", chr(ch), "'"])
 
-	@staticmethod
-	def ChCond(ch: Union[int, str], relOpStr: str = "==") -> str:
+	def ChCond(self, ch: Union[int, str], relOpStr: str = "==") -> str:
 		if isinstance(ch, str):
 			ch = ord(ch)
 
@@ -1465,8 +1467,7 @@ class DFA(object):
 		else:
 			return "".join(["self.ch ", relOpStr, " '", chr(ch), "'"])
 
-	@staticmethod
-	def PutRange(s: Union[Set[int], Set[Union[int, str]]]) -> None:
+	def PutRange(self, s: Union[Set[int], Set[Union[int, str]]]) -> None:
 		assert isinstance(s, set)
 		lo = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 		hi = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
@@ -1488,26 +1489,26 @@ class DFA(object):
 		if top == 1 and lo[0] == 0 and hi[1] == mx - 1 and hi[0] + 2 == lo[1]:
 			s1 = set()
 			s1.add(hi[0] + 1)
-			__class__.gen.write("not ")
-			__class__.PutRange(s1)
-			__class__.gen.write(" and Scanner.ch != Scanner.buffer.EOF")
+			self.gen.write("not ")
+			self.PutRange(s1)
+			self.gen.write(" and Scanner.ch != Scanner.buffer.EOF")
 		else:
-			__class__.gen.write("(")
+			self.gen.write("(")
 
 			for i in range(0, top + 1):
 				if hi[i] == lo[i]:
-					__class__.gen.write(__class__.ChCond(lo[i]))
+					self.gen.write(self.ChCond(lo[i]))
 				elif lo[i] == 0:
-					__class__.gen.write(__class__.ChCond(hi[i], "<="))
+					self.gen.write(self.ChCond(hi[i], "<="))
 				else:
-					__class__.gen.write(__class__.ChCond(lo[i], ">="))
-					__class__.gen.write(" and " + __class__.ChCond(hi[i], "<="))
+					self.gen.write(self.ChCond(lo[i], ">="))
+					self.gen.write(" and " + self.ChCond(hi[i], "<="))
 				if i < top:
-					__class__.gen.write("\n")
-					__class__.gen.write(INDENT * 5 + "  or ")
+					self.gen.write("\n")
+					self.gen.write(INDENT * 5 + "  or ")
 			if "ANYCHAR" in s:
-				__class__.gen.write(" or ord(self.ch) > %d" % CharClass.charSetSize)
-			__class__.gen.write(")")
+				self.gen.write(" or ord(self.ch) > %d" % CharClass.charSetSize)
+			self.gen.write(")")
 
 		# ---------- String handling
 
@@ -1537,8 +1538,7 @@ class DFA(object):
 			hx = "0" + hx
 		return "\\u" + hx
 
-	@staticmethod
-	def Unescape(s: str) -> str:
+	def Unescape(self, s: str) -> str:
 		# replaces escape sequences in s by their Unicode values.
 		assert isinstance(s, str)
 		buf = ""
@@ -1548,7 +1548,7 @@ class DFA(object):
 				ch = s[i + 1]
 				if ch in ("u", "x"):
 					if i + 4 <= len(s):
-						buf += __class__.Hex2Char(s[i + 2 : i + 6])
+						buf += self.Hex2Char(s[i + 2 : i + 6])
 						i += 6
 					else:
 						Errors.SemErr("bad escape sequence in string or character")
@@ -1572,43 +1572,40 @@ class DFA(object):
 			if ch in ("\\", "'", '"', "\t", "\r", "\n"):
 				buf += {"\\": "\\\\", "'": "\\'", '"': '\\"', "\t": "\\t", "\r": "\\r", "\n": "\\n"}[ch]
 			elif ch < " " or ch > chr(127):  # '\x7f'
-				buf += __class__.Char2Hex(ch)
+				buf += self.Char2Hex(ch)
 			else:
 				buf += ch
 		return buf
 
 	# ---------- State handling
-	@staticmethod
-	def NewState() -> State:
-		s = State()  # State
-		if __class__.firstState is None:
-			__class__.firstState = s
+	def NewState(self) -> State:
+		s = State(dfa=self)  # State
+		if self.firstState is None:
+			self.firstState = s
 		else:
-			__class__.lastState.next = s
-		__class__.lastState = s
+			self.lastState.next = s
+		self.lastState = s
 		return s
 
-	@staticmethod
-	def NewTransition(frm: State, to: State, typ: int, sym: Union[int, str], tc: int) -> None:
+	def NewTransition(self, frm: State, to: State, typ: int, sym: Union[int, str], tc: int) -> None:
 		assert isinstance(frm, State)
 		assert isinstance(to, State)
 		assert isinstance(typ, int)
 		assert isinstance(sym, (int, str))
 		assert isinstance(tc, int)
-		if to == __class__.firstState:
+		if to == self.firstState:
 			Errors.SemErr("token must not start with an iteration")
 		if isinstance(sym, str):
 			sym = ord(sym)
 		t = Target(to)
-		a = Action(typ, sym, tc)
+		a = Action(typ, sym, tc, dfa=self)
 		a.target = t
 		frm.AddAction(a)
-		if typ == Node.clas:
-			__class__.curSy.tokenKind = Symbol.classToken
+		if typ == NodeKind.clas:
+			self.curSy.tokenKind = Symbol.classToken
 
-	@staticmethod
-	def CombineShifts() -> None:
-		state = __class__.firstState
+	def CombineShifts(self) -> None:
+		state = self.firstState
 		while state is not None:
 			a = state.firstAction
 			while a is not None:
@@ -1627,8 +1624,7 @@ class DFA(object):
 				a = a.next
 			state = state.next
 
-	@staticmethod
-	def FindUsedStates(state: State, used: Set[int]) -> None:
+	def FindUsedStates(self, state: State, used: Set[int]) -> None:
 		assert isinstance(state, State)
 		assert isinstance(used, set)
 		if state.nr in used:
@@ -1636,18 +1632,17 @@ class DFA(object):
 		used.add(state.nr)
 		a = state.firstAction
 		while a is not None:
-			__class__.FindUsedStates(a.target.state, used)
+			self.FindUsedStates(a.target.state, used)
 			a = a.next
 
-	@staticmethod
-	def DeleteRedundantStates() -> None:
+	def DeleteRedundantStates(self) -> None:
 		newState = [None for x in range(State.lastNr + 1)]
 		used = set()
-		__class__.FindUsedStates(__class__.firstState, used)
+		self.FindUsedStates(self.firstState, used)
 		# combine equal final states
-		s1 = __class__.firstState.next
+		s1 = self.firstState.next
 		while s1 is not None:
-			# __class__.firstState cannot be final
+			# self.firstState cannot be final
 			if (s1.nr in used) and (s1.endOf is not None) and (s1.firstAction is None) and not s1.ctx:
 				s2 = s1.next
 				while s2 is not None:
@@ -1658,7 +1653,7 @@ class DFA(object):
 					s2 = s2.next
 			s1 = s1.next
 
-		state = __class__.firstState
+		state = self.firstState
 		while state is not None:
 			if state.nr in used:
 				a = state.firstAction
@@ -1669,48 +1664,45 @@ class DFA(object):
 			state = state.next
 
 		# delete unused states
-		__class__.lastState = __class__.firstState
-		State.lastNr = 0  # __class__.firstState has number 0
-		state = __class__.firstState.next
+		self.lastState = self.firstState
+		State.lastNr = 0  # self.firstState has number 0
+		state = self.firstState.next
 		while state is not None:
 			if state.nr in used:
 				State.lastNr += 1
 				state.nr = State.lastNr
-				__class__.lastState = state
+				self.lastState = state
 			else:
-				__class__.lastState.next = state.next
+				self.lastState.next = state.next
 			state = state.next
 
-	@staticmethod
-	def TheState(p: Optional[Node]) -> State:
+	def TheState(self, p: Optional[Node]) -> State:
 		assert isinstance(p, Node) or (p is None)
 		if p is None:
-			state = __class__.NewState()
-			state.endOf = __class__.curSy
+			state = self.NewState()
+			state.endOf = self.curSy
 			return state
 		else:
 			return p.state
 
-	@staticmethod
-	def Step(frm: State, p: Optional[Node], stepped: Set[int]) -> None:
+	def Step(self, frm: State, p: Optional[Node], stepped: Set[int]) -> None:
 		assert isinstance(frm, State)
 		assert isinstance(p, Node) or (p is None)
 		assert isinstance(stepped, set)
 		if p is None:
 			return
 		stepped.add(p.n)
-		if p.typ in (Node.clas, Node.chr):
-			__class__.NewTransition(frm, __class__.TheState(p.next), p.typ, p.val, p.code)
-		elif p.typ == Node.alt:
-			__class__.Step(frm, p.sub, stepped)
-			__class__.Step(frm, p.down, stepped)
-		elif p.typ in (Node.iter, Node.opt):
+		if p.typ in (NodeKind.clas, NodeKind.chr):
+			self.NewTransition(frm, self.TheState(p.next), p.typ, p.val, p.code)
+		elif p.typ == NodeKind.alt:
+			self.Step(frm, p.sub, stepped, trace)
+			self.Step(frm, p.down, stepped, trace)
+		elif p.typ in (NodeKind.iter, NodeKind.opt):
 			if (p.next is not None) and (p.next.n not in stepped):
-				__class__.Step(frm, p.next, stepped)
-			__class__.Step(frm, p.sub, stepped)
+				self.Step(frm, p.next, stepped, trace)
+			self.Step(frm, p.sub, stepped)
 
-	@staticmethod
-	def NumberNodes(p: Optional[Node], state: Optional[State]) -> None:
+	def NumberNodes(self, p: Optional[Node], state: Optional[State]) -> None:
 		"""Assigns a state n.state to every node n. There will be a transition
         from n.state to n.next.state triggered by n.val. All nodes in an
         alternative chain are represented by the same state."""
@@ -1721,24 +1713,23 @@ class DFA(object):
 		if p.state is not None:
 			return
 		if state is None:
-			state = __class__.NewState()
+			state = self.NewState()
 		p.state = state
 		if Node.DelGraph(p):
-			state.endOf = __class__.curSy
-		if p.typ in (Node.clas, Node.chr):
-			__class__.NumberNodes(p.next, None)
-		elif p.typ == Node.opt:
-			__class__.NumberNodes(p.next, None)
-			__class__.NumberNodes(p.sub, state)
-		elif p.typ == Node.iter:
-			__class__.NumberNodes(p.next, state)
-			__class__.NumberNodes(p.sub, state)
-		elif p.typ == Node.alt:
-			__class__.NumberNodes(p.sub, state)
-			__class__.NumberNodes(p.down, state)
+			state.endOf = self.curSy
+		if p.typ in (NodeKind.clas, NodeKind.chr):
+			self.NumberNodes(p.next, None)
+		elif p.typ == NodeKind.opt:
+			self.NumberNodes(p.next, None)
+			self.NumberNodes(p.sub, state)
+		elif p.typ == NodeKind.iter:
+			self.NumberNodes(p.next, state)
+			self.NumberNodes(p.sub, state)
+		elif p.typ == NodeKind.alt:
+			self.NumberNodes(p.sub, state)
+			self.NumberNodes(p.down, state)
 
-	@staticmethod
-	def FindTrans(p: Optional[Node], start: bool, marked: Set[int]) -> None:
+	def FindTrans(self, p: Optional[Node], start: bool, marked: Set[int]) -> None:
 		assert isinstance(p, Node) or (p is None)
 		assert isinstance(start, bool)
 		assert isinstance(marked, set)
@@ -1746,39 +1737,37 @@ class DFA(object):
 			return
 		marked.add(p.n)
 		if start:
-			__class__.Step(p.state, p, set())  # / start of group of equally numbered nodes
-		if p.typ in (Node.clas, Node.chr):
-			__class__.FindTrans(p.next, True, marked)
-		elif p.typ == Node.opt:
-			__class__.FindTrans(p.next, True, marked)
-			__class__.FindTrans(p.sub, False, marked)
-		elif p.typ == Node.iter:
-			__class__.FindTrans(p.next, False, marked)
-			__class__.FindTrans(p.sub, False, marked)
-		elif p.typ == Node.alt:
-			__class__.FindTrans(p.sub, False, marked)
-			__class__.FindTrans(p.down, False, marked)
+			self.Step(p.state, p, set())  # / start of group of equally numbered nodes
+		if p.typ in (NodeKind.clas, NodeKind.chr):
+			self.FindTrans(p.next, True, marked)
+		elif p.typ == NodeKind.opt:
+			self.FindTrans(p.next, True, marked)
+			self.FindTrans(p.sub, False, marked)
+		elif p.typ == NodeKind.iter:
+			self.FindTrans(p.next, False, marked)
+			self.FindTrans(p.sub, False, marked)
+		elif p.typ == NodeKind.alt:
+			self.FindTrans(p.sub, False, marked)
+			self.FindTrans(p.down, False, marked)
 
-	@staticmethod
-	def ConvertToStates(p: Node, sym: Symbol) -> None:
-		assert isinstance(p, Node)
+	def ConvertToStates(self, p: Node, sym: Symbol) -> None:
+		assert isinstance(p, Node), repr(p)
 		assert isinstance(sym, Symbol)
-		__class__.curGraph = p
-		__class__.curSy = sym
-		if Node.DelGraph(__class__.curGraph):
+		self.curGraph = p
+		self.curSy = sym
+		if Node.DelGraph(self.curGraph):
 			Errors.SemErr("token might be empty")
-		__class__.NumberNodes(__class__.curGraph, __class__.firstState)
-		__class__.FindTrans(__class__.curGraph, True, set())
+		self.NumberNodes(self.curGraph, self.firstState)
+		self.FindTrans(self.curGraph, True, set())
 
-	@staticmethod
-	def MatchLiteral(s: str, sym: Symbol) -> None:
+	def MatchLiteral(self, s: str, sym: Symbol) -> None:
 		assert isinstance(sym, Symbol)
 		assert isinstance(s, str)
 		"""match string against current automaton; store it either as a
       fixedToken or as a litToken"""
-		s = __class__.Unescape(s[1:-1])
+		s = self.Unescape(s[1:-1])
 		ln = len(s)
-		state = __class__.firstState  # State
+		state = self.firstState  # State
 		a = None
 		endedPrematurely = False
 		for i in range(0, ln):  # try to match s against existing DFA
@@ -1791,13 +1780,13 @@ class DFA(object):
 			i = ln
 		# if s was not totally consumed or leads to a non-final state => make new DFA from it
 		if (i != ln) or (state.endOf is None):
-			state = __class__.firstState
+			state = self.firstState
 			i = 0
 			a = None
-			__class__.dirtyDFA = True
+			self.dirtyDFA = True
 		while i < ln:  # make new DFA for s[i..len-1]
-			to = __class__.NewState()  # State
-			__class__.NewTransition(state, to, Node.chr, s[i], Node.normalTrans)
+			to = self.NewState()  # State
+			self.NewTransition(state, to, NodeKind.chr, s[i], Node.normalTrans)
 			state = to
 			i += 1
 		matchedSym = state.endOf  # Symbol
@@ -1811,8 +1800,7 @@ class DFA(object):
 			matchedSym.tokenKind = Symbol.classLitToken
 			sym.tokenKind = Symbol.litToken
 
-	@staticmethod
-	def SplitActions(state: State, a: Action, b: Action) -> None:
+	def SplitActions(self, state: State, a: Action, b: Action) -> None:
 		assert isinstance(state, State)
 		assert isinstance(a, Action)
 		assert isinstance(b, Action)
@@ -1838,7 +1826,7 @@ class DFA(object):
 			setb -= setc
 			a.ShiftWith(seta)
 			b.ShiftWith(setb)
-			c = Action(0, 0, Node.normalTrans)  # typ and sym are set in ShiftWith
+			c = Action(0, 0, Node.normalTrans, self)  # typ and sym are set in ShiftWith
 			c.AddTargets(a)
 			c.AddTargets(b)
 			c.ShiftWith(setc)
@@ -1848,23 +1836,22 @@ class DFA(object):
 	def Overlap(a: Action, b: Action) -> bool:
 		assert isinstance(a, Action)
 		assert isinstance(b, Action)
-		if a.typ == Node.chr:
-			if b.typ == Node.chr:
+		if a.typ == NodeKind.chr:
+			if b.typ == NodeKind.chr:
 				return a.sym == b.sym
 			else:
 				setb = CharClass.Set(b.sym)
 				return a.sym in setb
 		else:
 			seta = CharClass.Set(a.sym)
-			if b.typ == Node.chr:
+			if b.typ == NodeKind.chr:
 				return b.sym in seta
 			else:
 				setb = CharClass.Set(b.sym)
 				return len(seta & setb) > 0
 				# return seta.intersects( setb )
 
-	@staticmethod
-	def MakeUnique(state: State) -> bool:
+	def MakeUnique(self, state: State) -> bool:
 		assert isinstance(state, State)
 		# return True if actions were split
 		changed = False  # boolean
@@ -1872,15 +1859,14 @@ class DFA(object):
 		while a is not None:
 			b = a.next
 			while b is not None:
-				if __class__.Overlap(a, b):
-					__class__.SplitActions(state, a, b)
+				if self.Overlap(a, b):
+					self.SplitActions(state, a, b)
 					changed = True
 				b = b.next
 			a = a.next
 		return changed
 
-	@staticmethod
-	def MeltStates(state: State) -> None:
+	def MeltStates(self, state: State) -> None:
 		assert isinstance(state, State)
 		action = state.firstAction
 		while action is not None:
@@ -1891,24 +1877,23 @@ class DFA(object):
 				endOf = param[1]
 				melt = Melted.StateWithSet(targets)  # Melted
 				if melt is None:
-					s = __class__.NewState()
+					s = self.NewState()
 					s.endOf = endOf
 					s.ctx = ctx
 					targ = action.target
 					while targ is not None:
 						s.MeltWith(targ.state)
 						targ = targ.next
-					changed = __class__.MakeUnique(s)
+					changed = self.MakeUnique(s)
 					while changed:
-						changed = __class__.MakeUnique(s)
+						changed = self.MakeUnique(s)
 					melt = Melted(targets, s)
 				action.target.next = None
 				action.target.state = melt.state
 			action = action.next
 
-	@staticmethod
-	def FindCtxStates() -> None:
-		state = __class__.firstState
+	def FindCtxStates(self) -> None:
+		state = self.firstState
 		while state is not None:
 			a = state.firstAction
 			while a is not None:
@@ -1917,33 +1902,31 @@ class DFA(object):
 				a = a.next
 			state = state.next
 
-	@staticmethod
-	def MakeDeterministic() -> None:
-		__class__.lastSimState = __class__.lastState.nr
-		__class__.maxStates = 2 * __class__.lastSimState  # heuristic for set size in Melted.set
-		__class__.FindCtxStates()
-		state = __class__.firstState
+	def MakeDeterministic(self) -> None:
+		self.lastSimState = self.lastState.nr
+		self.maxStates = 2 * self.lastSimState  # heuristic for set size in Melted.set
+		self.FindCtxStates()
+		state = self.firstState
 		while state is not None:
-			changed = __class__.MakeUnique(state)
+			changed = self.MakeUnique(state)
 			while changed:
-				changed = __class__.MakeUnique(state)
+				changed = self.MakeUnique(state)
 			state = state.next
 
-		state = __class__.firstState
+		state = self.firstState
 		while state is not None:
-			__class__.MeltStates(state)
+			self.MeltStates(state)
 			state = state.next
-		__class__.DeleteRedundantStates()
-		__class__.CombineShifts()
+		self.DeleteRedundantStates()
+		self.CombineShifts()
 
-	@staticmethod
-	def PrintStates():
+	def PrintStates(self):
 		Trace.WriteLine()
 		Trace.WriteLine("Automaton Trace:")
 		Trace.WriteLine("---------------")
 		Trace.WriteLine()
 		Trace.WriteLine("---------- states ----------")
-		state = __class__.firstState
+		state = self.firstState
 		while state is not None:
 			first = True  # boolean
 			if state.endOf is None:
@@ -1960,10 +1943,10 @@ class DFA(object):
 					first = False
 				else:
 					Trace.Write(INDENT * 6 + "  ")
-				if action.typ == Node.clas:
+				if action.typ == NodeKind.clas:
 					Trace.Write(CharClass.classes[action.sym].name)
 				else:
-					Trace.Write(__class__.ReportCh(action.sym), 3)
+					Trace.Write(self.ReportCh(action.sym), 3)
 				targ = action.target
 				while targ is not None:
 					Trace.Write(str(targ.state.nr), 4)
@@ -1978,146 +1961,141 @@ class DFA(object):
 		Trace.WriteLine("---------- character classes ----------")
 		CharClass.WriteClasses()
 
-	@staticmethod
-	def GenComBody2(com: Comment) -> None:
+	def GenComBody2(self, com: Comment) -> None:
 		assert isinstance(com, Comment)
-		__class__.gen.write(INDENT * 2 + "while True:\n")
-		__class__.gen.write(INDENT * 3 + "if " + __class__.ChCond(com.stop[0]) + ":\n")
+		self.gen.write(INDENT * 2 + "while True:\n")
+		self.gen.write(INDENT * 3 + "if " + self.ChCond(com.stop[0]) + ":\n")
 		if len(com.stop) == 1:
-			__class__.gen.write(INDENT * 4 + "level -= 1\n")
-			__class__.gen.write(INDENT * 4 + "if level == 0:\n")
-			__class__.gen.write(INDENT * 5 + "self.oldEols = self.line - line0\n")
-			__class__.gen.write(INDENT * 5 + "self.NextCh()\n")
-			__class__.gen.write(INDENT * 5 + "return True\n")
-			__class__.gen.write(INDENT * 4 + "self.NextCh()\n")
+			self.gen.write(INDENT * 4 + "level -= 1\n")
+			self.gen.write(INDENT * 4 + "if level == 0:\n")
+			self.gen.write(INDENT * 5 + "self.oldEols = self.line - line0\n")
+			self.gen.write(INDENT * 5 + "self.NextCh()\n")
+			self.gen.write(INDENT * 5 + "return True\n")
+			self.gen.write(INDENT * 4 + "self.NextCh()\n")
 		else:
-			__class__.gen.write(INDENT * 4 + "self.NextCh()\n")
-			__class__.gen.write(INDENT * 4 + "if " + __class__.ChCond(com.stop[1]) + ":\n")
-			__class__.gen.write(INDENT * 5 + "level -= 1\n")
-			__class__.gen.write(INDENT * 5 + "if level == 0:\n")
-			__class__.gen.write(INDENT * 6 + "self.oldEols = self.line - line0\n")
-			__class__.gen.write(INDENT * 6 + "self.NextCh()\n")
-			__class__.gen.write(INDENT * 6 + "return True\n")
-			__class__.gen.write(INDENT * 5 + "self.NextCh()\n")
+			self.gen.write(INDENT * 4 + "self.NextCh()\n")
+			self.gen.write(INDENT * 4 + "if " + self.ChCond(com.stop[1]) + ":\n")
+			self.gen.write(INDENT * 5 + "level -= 1\n")
+			self.gen.write(INDENT * 5 + "if level == 0:\n")
+			self.gen.write(INDENT * 6 + "self.oldEols = self.line - line0\n")
+			self.gen.write(INDENT * 6 + "self.NextCh()\n")
+			self.gen.write(INDENT * 6 + "return True\n")
+			self.gen.write(INDENT * 5 + "self.NextCh()\n")
 		if com.nested:
-			__class__.gen.write(INDENT * 3 + "elif " + __class__.ChCond(com.start[0]) + ":\n")
+			self.gen.write(INDENT * 3 + "elif " + self.ChCond(com.start[0]) + ":\n")
 			if len(com.start) == 1:
-				__class__.gen.write(INDENT * 4 + "level += 1\n")
-				__class__.gen.write(INDENT * 4 + "self.NextCh()\n")
+				self.gen.write(INDENT * 4 + "level += 1\n")
+				self.gen.write(INDENT * 4 + "self.NextCh()\n")
 			else:
-				__class__.gen.write(INDENT * 4 + "self.NextCh()\n")
-				__class__.gen.write(INDENT * 4 + "if " + __class__.ChCond(com.start[1]) + ":\n")
-				__class__.gen.write(INDENT * 5 + "level += 1\n")
-				__class__.gen.write(INDENT * 5 + "self.NextCh()\n")
-		__class__.gen.write(INDENT * 3 + "elif self.ch == Buffer.EOF:\n")
-		__class__.gen.write(INDENT * 4 + "return False\n")
-		__class__.gen.write(INDENT * 3 + "else:\n")
-		__class__.gen.write(INDENT * 4 + "self.NextCh()\n")
+				self.gen.write(INDENT * 4 + "self.NextCh()\n")
+				self.gen.write(INDENT * 4 + "if " + self.ChCond(com.start[1]) + ":\n")
+				self.gen.write(INDENT * 5 + "level += 1\n")
+				self.gen.write(INDENT * 5 + "self.NextCh()\n")
+		self.gen.write(INDENT * 3 + "elif self.ch == Buffer.EOF:\n")
+		self.gen.write(INDENT * 4 + "return False\n")
+		self.gen.write(INDENT * 3 + "else:\n")
+		self.gen.write(INDENT * 4 + "self.NextCh()\n")
 
-	@staticmethod
-	def GenComBody3(com: Comment) -> None:
+	def GenComBody3(self, com: Comment) -> None:
 		assert isinstance(com, Comment)
-		__class__.gen.write(INDENT * 3 + "while True:\n")
-		__class__.gen.write(INDENT * 4 + "if " + __class__.ChCond(com.stop[0]) + ":\n")
+		self.gen.write(INDENT * 3 + "while True:\n")
+		self.gen.write(INDENT * 4 + "if " + self.ChCond(com.stop[0]) + ":\n")
 		if len(com.stop) == 1:
-			__class__.gen.write(INDENT * 5 + "level -= 1\n")
-			__class__.gen.write(INDENT * 5 + "if level == 0:\n")
-			__class__.gen.write(INDENT * 6 + "self.oldEols = self.line - line0\n")
-			__class__.gen.write(INDENT * 6 + "self.NextCh()\n")
-			__class__.gen.write(INDENT * 6 + "return True\n")
-			__class__.gen.write(INDENT * 5 + "self.NextCh()\n")
+			self.gen.write(INDENT * 5 + "level -= 1\n")
+			self.gen.write(INDENT * 5 + "if level == 0:\n")
+			self.gen.write(INDENT * 6 + "self.oldEols = self.line - line0\n")
+			self.gen.write(INDENT * 6 + "self.NextCh()\n")
+			self.gen.write(INDENT * 6 + "return True\n")
+			self.gen.write(INDENT * 5 + "self.NextCh()\n")
 		else:
-			__class__.gen.write(INDENT * 5 + "self.NextCh()\n")
-			__class__.gen.write(INDENT * 5 + "if " + __class__.ChCond(com.stop[1]) + ":\n")
-			__class__.gen.write(INDENT * 6 + "level -= 1\n")
-			__class__.gen.write(INDENT * 6 + "if level == 0:\n")
-			__class__.gen.write(INDENT * 6 * 2 + "self.oldEols = self.line - line0\n")
-			__class__.gen.write(INDENT * 6 * 2 + "self.NextCh()\n")
-			__class__.gen.write(INDENT * 6 * 2 + "return True\n")
-			__class__.gen.write(INDENT * 6 + "self.NextCh()\n")
+			self.gen.write(INDENT * 5 + "self.NextCh()\n")
+			self.gen.write(INDENT * 5 + "if " + self.ChCond(com.stop[1]) + ":\n")
+			self.gen.write(INDENT * 6 + "level -= 1\n")
+			self.gen.write(INDENT * 6 + "if level == 0:\n")
+			self.gen.write(INDENT * 6 * 2 + "self.oldEols = self.line - line0\n")
+			self.gen.write(INDENT * 6 * 2 + "self.NextCh()\n")
+			self.gen.write(INDENT * 6 * 2 + "return True\n")
+			self.gen.write(INDENT * 6 + "self.NextCh()\n")
 		if com.nested:
-			__class__.gen.write(INDENT * 4 + "elif " + __class__.ChCond(com.start[0]) + ":\n")
+			self.gen.write(INDENT * 4 + "elif " + self.ChCond(com.start[0]) + ":\n")
 			if len(com.start) == 1:
-				__class__.gen.write(INDENT * 5 + "level += 1")
-				__class__.gen.write(INDENT * 5 + "self.NextCh()")
+				self.gen.write(INDENT * 5 + "level += 1")
+				self.gen.write(INDENT * 5 + "self.NextCh()")
 			else:
-				__class__.gen.write(INDENT * 5 + "self.NextCh()\n")
-				__class__.gen.write(INDENT * 5 + "if " + __class__.ChCond(com.start[1]) + ":\n")
-				__class__.gen.write(INDENT * 6 + "level += 1\n")
-				__class__.gen.write(INDENT * 6 + "self.NextCh()\n")
-		__class__.gen.write(INDENT * 4 + "elif self.ch == Buffer.EOF:\n")
-		__class__.gen.write(INDENT * 5 + "return False\n")
-		__class__.gen.write(INDENT * 4 + "else:\n")
-		__class__.gen.write(INDENT * 5 + "self.NextCh()\n")
+				self.gen.write(INDENT * 5 + "self.NextCh()\n")
+				self.gen.write(INDENT * 5 + "if " + self.ChCond(com.start[1]) + ":\n")
+				self.gen.write(INDENT * 6 + "level += 1\n")
+				self.gen.write(INDENT * 6 + "self.NextCh()\n")
+		self.gen.write(INDENT * 4 + "elif self.ch == Buffer.EOF:\n")
+		self.gen.write(INDENT * 5 + "return False\n")
+		self.gen.write(INDENT * 4 + "else:\n")
+		self.gen.write(INDENT * 5 + "self.NextCh()\n")
 
-	@staticmethod
-	def GenComment(com: Comment, i: int) -> None:
+	def GenComment(self, com: Comment, i: int) -> None:
 		assert isinstance(com, Comment)
 		assert isinstance(i, int)
-		__class__.gen.write("\n")
-		__class__.gen.write(INDENT + "def Comment" + str(i) + "( self ):\n")
-		__class__.gen.write(INDENT * 2 + "level = 1\n")
-		__class__.gen.write(INDENT * 2 + "line0 = self.line\n")
-		__class__.gen.write(INDENT * 2 + "lineStart0 = self.lineStart\n")
+		self.gen.write("\n")
+		self.gen.write(INDENT + "def Comment" + str(i) + "( self ):\n")
+		self.gen.write(INDENT * 2 + "level = 1\n")
+		self.gen.write(INDENT * 2 + "line0 = self.line\n")
+		self.gen.write(INDENT * 2 + "lineStart0 = self.lineStart\n")
 		if len(com.start) == 1:
-			__class__.gen.write(INDENT * 2 + "self.NextCh()\n")
-			__class__.GenComBody2(com)
+			self.gen.write(INDENT * 2 + "self.NextCh()\n")
+			self.GenComBody2(com)
 		else:
-			__class__.gen.write(INDENT * 2 + "self.NextCh()\n")
-			__class__.gen.write(INDENT * 2 + "if " + __class__.ChCond(com.start[1]) + ":\n")
-			__class__.gen.write(INDENT * 3 + "self.NextCh()\n")
-			__class__.GenComBody3(com)
-			__class__.gen.write(INDENT * 2 + "else:\n")
-			__class__.gen.write(INDENT * 3 + "if self.ch == Scanner.EOL:\n")
-			__class__.gen.write(INDENT * 4 + "self.line -= 1\n")
-			__class__.gen.write(INDENT * 4 + "self.lineStart = lineStart0\n")
-			__class__.gen.write(INDENT * 3 + "self.pos = self.pos - 2\n")
-			__class__.gen.write(INDENT * 3 + "self.buffer.setPos(self.pos+1)\n")
-			__class__.gen.write(INDENT * 3 + "self.NextCh()\n")
-			__class__.gen.write(INDENT * 2 + "return False\n")
+			self.gen.write(INDENT * 2 + "self.NextCh()\n")
+			self.gen.write(INDENT * 2 + "if " + self.ChCond(com.start[1]) + ":\n")
+			self.gen.write(INDENT * 3 + "self.NextCh()\n")
+			self.GenComBody3(com)
+			self.gen.write(INDENT * 2 + "else:\n")
+			self.gen.write(INDENT * 3 + "if self.ch == Scanner.EOL:\n")
+			self.gen.write(INDENT * 4 + "self.line -= 1\n")
+			self.gen.write(INDENT * 4 + "self.lineStart = lineStart0\n")
+			self.gen.write(INDENT * 3 + "self.pos = self.pos - 2\n")
+			self.gen.write(INDENT * 3 + "self.buffer.setPos(self.pos+1)\n")
+			self.gen.write(INDENT * 3 + "self.NextCh()\n")
+			self.gen.write(INDENT * 2 + "return False\n")
 
-	@staticmethod
-	def CopyFramePart(stop: str) -> None:
+	def CopyFramePart(self, stop: str) -> None:
 		assert isinstance(stop, str)
 		last = 0  # int
 		startCh = stop[0]
 		endOfStopString = len(stop) - 1
-		ch = __class__.framRead()  # int
+		ch = self.framRead()  # int
 
-		while ch != __class__.EOF:
+		while ch != self.EOF:
 			if ch == startCh:
 				i = 0
 				if i == endOfStopString:
 					return  # stop[0..i] found
-				ch = __class__.framRead()
+				ch = self.framRead()
 				i += 1
 				while ch == stop[i]:
 					if i == endOfStopString:
 						return  # stop[0..i] found
-					ch = __class__.framRead()
+					ch = self.framRead()
 					i += 1
 				# stop
-				__class__.gen.write(stop[0:1])
-			elif ch == __class__.LF:
-				if last != __class__.CR:
-					__class__.gen.write("\n")
+				self.gen.write(stop[0:1])
+			elif ch == self.LF:
+				if last != self.CR:
+					self.gen.write("\n")
 				last = ch
-				ch = __class__.framRead()
-			elif ch == __class__.CR:
-				__class__.gen.write("\n")
+				ch = self.framRead()
+			elif ch == self.CR:
+				self.gen.write("\n")
 				last = ch
-				ch = __class__.framRead()
+				ch = self.framRead()
 			else:
 				if isinstance(chr, int):
-					__class__.gen.write(chr(ch))
+					self.gen.write(chr(ch))
 				else:
-					__class__.gen.write(ch)
+					self.gen.write(ch)
 				last = ch
-				ch = __class__.framRead()
+				ch = self.framRead()
 		raise RuntimeError(" -- incomplete or corrupt scanner frame file")
 
-	@staticmethod
-	def SymName(sym: Symbol) -> str:
+	def SymName(self, sym: Symbol) -> str:
 		assert isinstance(sym, Symbol)
 		if sym.name[0].isalpha():
 			# real name value is stored in Tab.literals
@@ -2126,103 +2104,100 @@ class DFA(object):
 					return me_key
 		return sym.name
 
-	@staticmethod
-	def GenLiterals() -> None:
-		__class__.gen.write("lit = self.t.val")
-		if __class__.ignoreCase:
-			__class__.gen.write(".lower()")
-		__class__.gen.write("\n")
+	def GenLiterals(self) -> None:
+		self.gen.write("lit = self.t.val")
+		if self.ignoreCase:
+			self.gen.write(".lower()")
+		self.gen.write("\n")
 		first = True  # boolean
 		for sym in Symbol.terminals:
 			if sym.tokenKind == Symbol.litToken:
-				name = __class__.SymName(sym)  # String
-				if __class__.ignoreCase:
+				name = self.SymName(sym)  # String
+				if self.ignoreCase:
 					name = name.lower()
 				# sym.name stores literals with quotes, e.g. "\"Literal\"",
 				if first:
-					__class__.gen.write(INDENT * 2 + "if ")
+					self.gen.write(INDENT * 2 + "if ")
 					first = False
 				else:
-					__class__.gen.write(INDENT * 2 + "elif ")
-				__class__.gen.write("lit == " + name + ":\n")
-				__class__.gen.write(INDENT * 3 + "self.t.kind = ")
-				__class__.PrintTermName(sym)
-				__class__.gen.write("\n")
+					self.gen.write(INDENT * 2 + "elif ")
+				self.gen.write("lit == " + name + ":\n")
+				self.gen.write(INDENT * 3 + "self.t.kind = ")
+				self.PrintTermName(sym)
+				self.gen.write("\n")
 
-	@staticmethod
-	def WriteState(state: State) -> None:
+	def WriteState(self, state: State) -> None:
 		assert isinstance(state, State)
 		endOf = state.endOf  # Symbol
-		__class__.gen.write(str(state.nr) + ":\n")
+		self.gen.write(str(state.nr) + ":\n")
 		ctxEnd = state.ctx  # boolean
 		action = state.firstAction
 		while action is not None:
 			if action == state.firstAction:
-				__class__.gen.write(INDENT * 4 + "if ")
+				self.gen.write(INDENT * 4 + "if ")
 			else:
-				__class__.gen.write(INDENT * 4 + "elif ")
-			if action.typ == Node.chr:
-				__class__.gen.write(__class__.ChCond(action.sym))
+				self.gen.write(INDENT * 4 + "elif ")
+			if action.typ == NodeKind.chr:
+				self.gen.write(self.ChCond(action.sym))
 			else:
-				__class__.PutRange(CharClass.Set(action.sym))
-			__class__.gen.write(":\n")
+				self.PutRange(CharClass.Set(action.sym))
+			self.gen.write(":\n")
 			if action.tc == Node.contextTrans:
-				__class__.gen.write(INDENT * 5 + "apx += 1\n")
+				self.gen.write(INDENT * 5 + "apx += 1\n")
 				ctxEnd = False
 			elif state.ctx:
-				__class__.gen.write(INDENT * 5 + "apx = 0\n")
-			if __class__.ignoreCase:
-				__class__.gen.write(INDENT * 5 + "buf += str(self.ch)\n")
+				self.gen.write(INDENT * 5 + "apx = 0\n")
+			if self.ignoreCase:
+				self.gen.write(INDENT * 5 + "buf += str(self.ch)\n")
 			else:
-				__class__.gen.write(INDENT * 5 + "buf += str(self.ch)\n")
-			__class__.gen.write(INDENT * 5 + "self.NextCh()\n")
-			__class__.gen.write(INDENT * 5 + "state = " + str(action.target.state.nr) + "\n")
+				self.gen.write(INDENT * 5 + "buf += str(self.ch)\n")
+			self.gen.write(INDENT * 5 + "self.NextCh()\n")
+			self.gen.write(INDENT * 5 + "state = " + str(action.target.state.nr) + "\n")
 			action = action.next
 		if state.firstAction is not None:
-			__class__.gen.write(INDENT * 4 + "else:\n")
+			self.gen.write(INDENT * 4 + "else:\n")
 		if ctxEnd:  # final context state: cut appendix
-			__class__.gen.write("\n")
-			__class__.gen.write(INDENT * 4 + "self.pos = self.pos - apx - 1\n")
-			__class__.gen.write(INDENT * 4 + "self.line = self.t.line\n")
-			__class__.gen.write(INDENT * 4 + "self.buffer.setPos(self.pos+1)\n")
-			__class__.gen.write(INDENT * 4 + "self.NextCh()\n")
-			# __class__.gen.write(INDENT * 4 +"")
+			self.gen.write("\n")
+			self.gen.write(INDENT * 4 + "self.pos = self.pos - apx - 1\n")
+			self.gen.write(INDENT * 4 + "self.line = self.t.line\n")
+			self.gen.write(INDENT * 4 + "self.buffer.setPos(self.pos+1)\n")
+			self.gen.write(INDENT * 4 + "self.NextCh()\n")
+			# self.gen.write(INDENT * 4 +"")
 		if state.firstAction is not None:
 			if endOf is None:
-				__class__.gen.write(INDENT * 5 + "self.t.kind = ScannerEnum.noSym\n")
-				__class__.gen.write(INDENT * 5 + "done = True\n")
+				self.gen.write(INDENT * 5 + "self.t.kind = ScannerEnum.noSym\n")
+				self.gen.write(INDENT * 5 + "done = True\n")
 			else:
-				__class__.gen.write(INDENT * 5 + "self.t.kind = ")
-				__class__.PrintTermName(endOf)
-				__class__.gen.write("\n")
+				self.gen.write(INDENT * 5 + "self.t.kind = ")
+				self.PrintTermName(endOf)
+				self.gen.write("\n")
 				if endOf.tokenKind == Symbol.classLitToken:
-					__class__.gen.write(INDENT * 5 + "self.t.val = buf\n")
-					__class__.gen.write(INDENT * 5 + "self.CheckLiteral()\n")
-					__class__.gen.write(INDENT * 5 + "return self.t\n")
+					self.gen.write(INDENT * 5 + "self.t.val = buf\n")
+					self.gen.write(INDENT * 5 + "self.CheckLiteral()\n")
+					self.gen.write(INDENT * 5 + "return self.t\n")
 				else:
-					__class__.gen.write(INDENT * 5 + "done = True\n")
+					self.gen.write(INDENT * 5 + "done = True\n")
 		else:
 			if endOf is None:
-				__class__.gen.write(INDENT * 4 + "self.t.kind = ScannerEnum.noSym\n")
-				__class__.gen.write(INDENT * 4 + "done = True\n")
+				self.gen.write(INDENT * 4 + "self.t.kind = ScannerEnum.noSym\n")
+				self.gen.write(INDENT * 4 + "done = True\n")
 			else:
-				__class__.gen.write(INDENT * 4 + "self.t.kind = ")
-				__class__.PrintTermName(endOf)
-				__class__.gen.write("\n")
+				self.gen.write(INDENT * 4 + "self.t.kind = ")
+				self.PrintTermName(endOf)
+				self.gen.write("\n")
 				if endOf.tokenKind == Symbol.classLitToken:
-					__class__.gen.write(INDENT * 4 + "self.t.val = buf")
-					__class__.gen.write(INDENT * 4 + "self.CheckLiteral()\n")
-					__class__.gen.write(INDENT * 4 + "return self.t\n")
+					self.gen.write(INDENT * 4 + "self.t.val = buf")
+					self.gen.write(INDENT * 4 + "self.CheckLiteral()\n")
+					self.gen.write(INDENT * 4 + "return self.t\n")
 				else:
-					__class__.gen.write(INDENT * 4 + "done = True\n")
+					self.gen.write(INDENT * 4 + "done = True\n")
 
-	@staticmethod
-	def FillStartTab(startTab: List[int]) -> None:
+	def FillStartTab(self, startTab: List[int]) -> None:
 		assert isinstance(startTab, list)
-		action = __class__.firstState.firstAction
+		action = self.firstState.firstAction
 		while action is not None:
 			targetState = action.target.state.nr  # int
-			if action.typ == Node.chr:
+			if action.typ == NodeKind.chr:
 				startTab[action.sym] = targetState
 			else:
 				s = CharClass.Set(action.sym)  # BitSet
@@ -2231,146 +2206,146 @@ class DFA(object):
 						startTab[i] = targetState
 			action = action.next
 
-	@staticmethod
-	def OpenGen(backUp: bool) -> None:
+	def OpenGen(self, backUp: bool) -> None:
 		assert isinstance(backUp, bool)
 		try:
-			fn = __class__.outDir / "Scanner.py"  # String
+			fn = self.outDir / "Scanner.py"  # String
 			if backUp and fn.is_file():
 				backUpFile = fn.parent / (fn.name + ".old")
 				if backUpFile.is_file():
 					os.remove(str(backUpFile))
 				os.rename(str(fn), str(backUpFile))
-			__class__.gen = fn.open("wt", encoding="utf-8")
-		except BaseException:
+			self.gen = fn.open("wt", encoding="utf-8")
+		except BaseException as ex:
+			print(ex)
 			raise RuntimeError("-- Compiler Error: Cannot generate scanner file.")
 
-	@staticmethod
-	def WriteScanner(withNames: bool) -> None:
+	def WriteScanner(self, withNames: bool) -> None:
 		assert isinstance(withNames, bool)
 		startTab = [0 for i in range(CharClass.charSetSize)]
-		fr = __class__.srcDir / "Scanner.frame"  # String
+		fr = self.srcDir / "Scanner.frame"  # String
 		if not fr.is_file():
 			if Tab.frameDir is not None:
 				fr = Tab.frameDir / "Scanner.frame"
 			if not fr.is_file():
 				raise RuntimeError("-- Compiler Error: Cannot find Scanner.frame")
 		try:
-			__class__.fram = open(fr, "rt", encoding="utf-8")
+			self.fram = open(fr, "rt", encoding="utf-8")
 		except BaseException:
 			raise RuntimeError("-- Compiler Error: Cannot open Scanner.frame.")
-		__class__.OpenGen(True)
-		if __class__.dirtyDFA:
-			__class__.MakeDeterministic()
-		__class__.FillStartTab(startTab)
-		__class__.CopyFramePart("-->begin")
-		if not __class__.srcName.lower().endswith("coco.atg"):
-			__class__.gen.close()
-			__class__.OpenGen(False)
+		self.OpenGen(True)
+		if self.dirtyDFA:
+			self.MakeDeterministic()
+		self.FillStartTab(startTab)
+		self.CopyFramePart("-->begin")
+		if not self.srcName.lower().endswith("coco.atg"):
+			self.gen.close()
+			self.OpenGen(False)
 
-		__class__.CopyFramePart("-->declarations")
-		__class__.gen.write(INDENT + "charSetSize = " + str(CharClass.charSetSize) + "\n")
-		__class__.gen.write(INDENT + "maxT = " + str(len(Symbol.terminals) - 1) + "\n")
-		__class__.gen.write(INDENT + "noSym = " + str(Tab.noSym.n) + "\n")
+		self.CopyFramePart("-->scannerenum")
+		self.gen.write(INDENT + "charSetSize = " + str(CharClass.charSetSize) + "\n")
+		self.gen.write(INDENT + "maxT = " + str(len(Symbol.terminals) - 1) + "\n")
+		self.gen.write(INDENT + "noSym = " + str(Tab.noSym.n) + "\n")
 		if withNames:
-			__class__.gen.write(INDENT + "# terminals\n")
+			self.gen.write(INDENT + "# terminals\n")
 			for sym in Symbol.terminals:
-				__class__.gen.write(INDENT + "" + sym.symName + " = " + str(sym.n) + "\n")
-			__class__.gen.write(INDENT + "# pragmas\n")
+				self.gen.write(INDENT + "" + sym.symName + " = " + str(sym.n) + "\n")
+			self.gen.write(INDENT + "# pragmas\n")
 			for sym in Symbol.pragmas:
-				__class__.gen.write(INDENT + "" + sym.symName + " = " + str(sym.n) + "\n")
-			__class__.gen.write("\n")
-		__class__.gen.write(INDENT + "start = [\n")
+				self.gen.write(INDENT + "" + sym.symName + " = " + str(sym.n) + "\n")
+			self.gen.write("\n")
+		self.CopyFramePart("-->declarations")
+		self.gen.write(INDENT + "start = [\n")
 		for i in range(0, CharClass.charSetSize // 16):
-			__class__.gen.write(INDENT + "")
+			self.gen.write(INDENT + "")
 			for j in range(0, 16):
-				__class__.gen.write(Trace.formatString(str(startTab[16 * i + j]), 3))
-				__class__.gen.write(",")
-			__class__.gen.write("\n")
-		__class__.gen.write(INDENT + "  -1]\n")
+				self.gen.write(Trace.formatString(str(startTab[16 * i + j]), 3))
+				self.gen.write(",")
+			self.gen.write("\n")
+		self.gen.write(INDENT + "  -1]\n")
 
-		if __class__.ignoreCase:
-			__class__.gen.write(INDENT + "valCh = ''       # current input character (for token.val)")
+		if self.ignoreCase:
+			self.gen.write(INDENT + "valCh = ''       # current input character (for token.val)")
 
-		__class__.CopyFramePart("-->initialization")
+		self.CopyFramePart("-->initialization")
 		j = 0
 		for i in Tab.ignored:
-			__class__.gen.write(INDENT * 2 + "self.ignore.add(" + str(i) + ") \n")
+			self.gen.write(INDENT * 2 + "self.ignore.add(" + str(i) + ") \n")
 
-		__class__.CopyFramePart("-->casing")
-		if __class__.ignoreCase:
-			__class__.gen.write(INDENT * 2 + "valCh = self.ch\n")
-			__class__.gen.write(INDENT * 2 + "if self.ch != Buffer.EOF:\n")
-			__class__.gen.write(INDENT * 3 + "self.ch = self.ch.lower()\n")
+		self.CopyFramePart("-->casing")
+		if self.ignoreCase:
+			self.gen.write(INDENT * 2 + "valCh = self.ch\n")
+			self.gen.write(INDENT * 2 + "if self.ch != Buffer.EOF:\n")
+			self.gen.write(INDENT * 3 + "self.ch = self.ch.lower()\n")
 
-		__class__.CopyFramePart("-->comments")
+		self.CopyFramePart("-->comments")
 		com = Comment.first  # Comment
 		i = 0
 		while com is not None:
-			__class__.GenComment(com, i)
+			self.GenComment(com, i)
 			com = com.next
 			i += 1
 
-		__class__.CopyFramePart("-->literals")
-		__class__.GenLiterals()
+		self.CopyFramePart("-->literals")
+		self.GenLiterals()
 
-		__class__.CopyFramePart("-->scan1")
+		self.CopyFramePart("-->scan1")
 		if Comment.first is not None:
-			__class__.gen.write("if (")
+			self.gen.write("if (")
 			com = Comment.first
 			i = 0
 			while com is not None:
-				__class__.gen.write(__class__.ChCond(com.start[0]))
-				__class__.gen.write(" and self.Comment" + str(i) + "()")
+				self.gen.write(self.ChCond(com.start[0]))
+				self.gen.write(" and self.Comment" + str(i) + "()")
 				if com.next is not None:
-					__class__.gen.write(" or ")
+					self.gen.write(" or ")
 				com = com.next
 				i += 1
-			__class__.gen.write("):\n")
-			__class__.gen.write(INDENT * 3 + "return self.NextToken()\n")
-		if __class__.hasCtxMoves:
-			__class__.gen.write("\n")
-			__class__.gen.write(INDENT * 2 + "apx = 0")
+			self.gen.write("):\n")
+			self.gen.write(INDENT * 3 + "return self.NextToken()\n")
+		if self.hasCtxMoves:
+			self.gen.write("\n")
+			self.gen.write(INDENT * 2 + "apx = 0")
 
-		__class__.CopyFramePart("-->scan2")
-		if __class__.ignoreCase:
-			__class__.gen.write("buf += str(self.ch)\n")
-			__class__.gen.write(INDENT * 2 + "self.NextCh()\n")
+		self.CopyFramePart("-->scan2")
+		if self.ignoreCase:
+			self.gen.write("buf += str(self.ch)\n")
+			self.gen.write(INDENT * 2 + "self.NextCh()\n")
 		else:
-			__class__.gen.write("buf += str(self.ch)\n")
-			__class__.gen.write(INDENT * 2 + "self.NextCh()\n")
+			self.gen.write("buf += str(self.ch)\n")
+			self.gen.write(INDENT * 2 + "self.NextCh()\n")
 
-		__class__.CopyFramePart("-->scan3")
-		state = __class__.firstState.next
+		self.CopyFramePart("-->scan3")
+		state = self.firstState.next
 		while state is not None:
-			__class__.gen.write(INDENT * 3 + "elif state == ")
-			__class__.WriteState(state)
+			self.gen.write(INDENT * 3 + "elif state == ")
+			self.WriteState(state)
 			state = state.next
-		__class__.CopyFramePart("$$$")
-		__class__.gen.close()
+		self.CopyFramePart("$$$")
+		self.gen.close()
 
-	def __init__(self, file: str, srcDir: Path, outDir: Path) -> None:
+	def __init__(self, file: str, srcDir: Path, outDir: Path, trace) -> None:
 		assert isinstance(file, str), repr(str)
 		assert isinstance(srcDir, Path), repr(srcDir)
 		assert isinstance(outDir, Path), repr(outDir)
-		__class__.srcName = file
-		__class__.srcDir = srcDir
-		__class__.outDir = outDir
-		__class__.firstState = None
-		__class__.lastState = None
+		self.trace = trace
+		self.srcName = file
+		self.srcDir = srcDir
+		self.outDir = outDir
+		self.firstState = None
+		self.lastState = None
 		State.lastNr = -1
-		__class__.firstState = __class__.NewState()
+		self.firstState = self.NewState()
 		Melted.first = None
 		Comment.first = None
-		__class__.ignoreCase = False
-		__class__.dirtyDFA = False
-		__class__.hasCtxMoves = False
+		self.ignoreCase = False
+		self.dirtyDFA = False
+		self.hasCtxMoves = False
 
-	@staticmethod
-	def PrintTermName(sym: Symbol) -> None:
+	def PrintTermName(self, sym: Symbol) -> None:
 		assert isinstance(sym, Symbol)
 		if sym.symName is None:
-			__class__.gen.write(str(sym.n))
+			self.gen.write(str(sym.n))
 		else:
-			__class__.gen.write("Scanner.")
-			__class__.gen.write(str(sym.symName))
+			self.gen.write("ScannerEnum.")
+			self.gen.write(str(sym.symName))

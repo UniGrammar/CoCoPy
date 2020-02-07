@@ -27,12 +27,13 @@
 #-------------------------------------------------------------------------*/
 -->begin
 import sys
+from enum import IntEnum
 
-from Scanner import Token
-from Scanner import Scanner
-from Scanner import Position
+from .Scanner import Token
+from .Scanner import Scanner
+from .Scanner import Position
 
-class ErrorRec( object ):
+class ErrorRec:
 	def __init__( self, l, c, s ):
 		self.line   = l
 		self.col    = c
@@ -40,7 +41,7 @@ class ErrorRec( object ):
 		self.str    = s
 
 
-class Errors( object ):
+class Errors:
 	errMsgFormat = "file %(file)s : (%(line)d, %(col)d) %(text)s\n"
 	eof          = False
 	count        = 0         # number of errors detected
@@ -163,9 +164,10 @@ class Errors( object ):
 		if (Errors.count > 0) and Errors.mergeErrors:
 			sys.stdout.write( 'see ' + Errors.listName + '\n' )
 
-
-class Parser( object ):
+class ParserEnum(IntEnum):
 -->constants
+
+class Parser:
 	T          = True
 	x          = False
 	minErrDist = 2

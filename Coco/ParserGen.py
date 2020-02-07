@@ -34,7 +34,7 @@ import io
 
 from .Errors import Errors
 from .Trace import Trace
-from .Core import Node, DFA, Symbol, Tab, INDENT
+from .Core import Node, NodeKind, DFA, Symbol, Tab, INDENT
 from .CodeGenerator import CodeGenerator
 
 
@@ -58,8 +58,6 @@ class ParserGen(object):
 	srcName = ""  # name of attributed grammar file
 	srcDir = ""  # directory of attributed grammar file
 	symSet = []
-
-	codeGen = CodeGenerator()
 
 	@staticmethod
 	def Overlaps(s1, s2):
@@ -99,7 +97,7 @@ class ParserGen(object):
 	def GenCond(self, s: Set[int], p: Node) -> None:
 		assert isinstance(s, set)
 		assert isinstance(p, Node)
-		if p.typ == Node.rslv:
+		if p.typ == NodeKind.rslv:
 			self.codeGen.CopySourcePart(p.pos, 0)
 		else:
 			n = len(s)
@@ -123,14 +121,14 @@ class ParserGen(object):
 		assert isinstance(indent, int)
 		assert isinstance(isChecked, set)
 		while p is not None:
-			if p.typ == Node.nt:  # Non-Terminals
+			if p.typ == NodeKind.nt:  # Non-Terminals
 				self.codeGen.Indent(indent)
 				if p.retVar is not None:
 					self.codeGen.write(p.retVar + " = ")
 				self.codeGen.write("self." + p.sym.name + "(")
 				self.codeGen.CopySourcePart(p.pos, 0)
 				self.codeGen.write(")\n")
-			elif p.typ == Node.t:  # Terminals
+			elif p.typ == NodeKind.t:  # Terminals
 				self.codeGen.Indent(indent)
 				if p.sym.n in isChecked:
 					self.codeGen.write("self.Get( )\n")
@@ -138,26 +136,26 @@ class ParserGen(object):
 					self.codeGen.write("self.Expect(")
 					self.PrintTermName(p.sym)
 					self.codeGen.write(")\n")
-			elif p.typ == Node.wt:
+			elif p.typ == NodeKind.wt:
 				self.codeGen.Indent(indent)
 				s1 = Tab.Expected(p.next, self.curSy)
 				s1 |= Tab.allSyncSets
 				self.codeGen.write("self.ExpectWeak(")
 				self.PrintTermName(p.sym)
 				self.codeGen.write(", " + str(self.NewCondSet(s1)) + ")\n")
-			elif p.typ == Node.any:
+			elif p.typ == NodeKind.any:
 				self.codeGen.Indent(indent)
 				self.codeGen.write("self.Get()\n")
-			elif p.typ == Node.eps:
+			elif p.typ == NodeKind.eps:
 				self.codeGen.Indent(indent)
 				self.codeGen.write("pass\n")
-			elif p.typ == Node.rslv:
+			elif p.typ == NodeKind.rslv:
 				# self.codeGen.Indent( indent )
 				# self.codeGen.write( 'pass\n' )
 				pass  # Nothing to do
-			elif p.typ == Node.sem:
+			elif p.typ == NodeKind.sem:
 				self.codeGen.CopySourcePart(p.pos, indent)
-			elif p.typ == Node.sync:
+			elif p.typ == NodeKind.sync:
 				self.codeGen.Indent(indent)
 				self.GenErrorMsg(self.syncErr, self.curSy)
 				s1 = copy.copy(p.set)
@@ -168,7 +166,7 @@ class ParserGen(object):
 				self.codeGen.write("self.SynErr(" + str(self.errorNr) + ")\n")
 				self.codeGen.Indent(indent + 1)
 				self.codeGen.write("self.Get()\n")
-			elif p.typ == Node.alt:
+			elif p.typ == NodeKind.alt:
 				s1 = Tab.First(p)
 				p2 = p
 				equal = s1 == isChecked
@@ -194,11 +192,11 @@ class ParserGen(object):
 					self.codeGen.write("else:\n")
 					self.codeGen.Indent(indent + 1)
 					self.codeGen.write("self.SynErr(" + str(self.errorNr) + ")\n")
-			elif p.typ == Node.iter:
+			elif p.typ == NodeKind.iter:
 				self.codeGen.Indent(indent)
 				p2 = p.sub
 				self.codeGen.write("while ")
-				if p2.typ == Node.wt:
+				if p2.typ == NodeKind.wt:
 					s1 = Tab.Expected(p2.next, self.curSy)
 					s2 = Tab.Expected(p.next, self.curSy)
 					self.codeGen.write("self.WeakSeparator(")
@@ -215,7 +213,7 @@ class ParserGen(object):
 				self.codeGen.write(":\n")
 				self.GenCode(p2, indent + 1, s1)
 				self.codeGen.write("\n")
-			elif p.typ == Node.opt:
+			elif p.typ == NodeKind.opt:
 				s1 = Tab.First(p.sub)
 				self.codeGen.Indent(indent)
 				self.codeGen.write("if (")
@@ -223,7 +221,7 @@ class ParserGen(object):
 				self.codeGen.write("):\n")
 				self.GenCode(p.sub, indent + 1, s1)
 
-			if p.typ != Node.eps and p.typ != Node.sem and p.typ != Node.sync:
+			if p.typ != NodeKind.eps and p.typ != NodeKind.sem and p.typ != NodeKind.sync:
 				for val in range(0, len(isChecked)):
 					isChecked.discard(val)
 
@@ -295,13 +293,14 @@ class ParserGen(object):
 			else:
 				self.codeGen.write("x],\n")
 
-	def __init__(self, fn: str, dir: Path) -> None:
+	def __init__(self, fn: str, dir: Path, outDir, FrameDir) -> None:
 		assert isinstance(fn, str)
 		assert isinstance(dir, Path)
 		self.srcName = fn
 		self.srcDir = dir
 		self.errorNr = -1
 		self.usingPos = None
+		self.codeGen = CodeGenerator(self.srcDir, outDir, FrameDir)
 
 	def WriteParser(self, withNames: bool) -> None:
 		assert isinstance(withNames, bool)
@@ -360,5 +359,5 @@ class ParserGen(object):
 		if sym.symName is None:
 			self.codeGen.write(str(sym.n))
 		else:
-			self.codeGen.write("Scanner.")
+			self.codeGen.write("ScannerEnum.")
 			self.codeGen.write(str(sym.symName))

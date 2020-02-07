@@ -27,8 +27,9 @@
 #-------------------------------------------------------------------------
 -->begin
 import sys
+from enum import IntEnum
 
-class Token( object ):
+class Token:
 	def __init__( self ):
 		self.kind   = 0     # token kind
 		self.pos    = 0     # token position in the source text (starting at 0)
@@ -38,7 +39,7 @@ class Token( object ):
 		self.next   = None  # AW 2003-03-07 Tokens are kept in linked list
 
 
-class Position( object ):    # position of source code stretch (e.g. semantic action, resolver expressions)
+class Position:    # position of source code stretch (e.g. semantic action, resolver expressions)
 	def __init__( self, buf, beg, len, col ):
 		assert isinstance( buf, Buffer )
 		assert isinstance( beg, int )
@@ -53,7 +54,7 @@ class Position( object ):    # position of source code stretch (e.g. semantic ac
 	def getSubstring( self ):
 		return self.buf.readPosition( self )
 
-class Buffer( object ):
+class Buffer:
 	EOF      = '\u0100'     # 256
 
 	def __init__( self, s ):
@@ -110,11 +111,13 @@ class Buffer( object ):
 	def __iter__( self ):
 		return iter(self.lines)
 
-class Scanner(object):
-	EOL     = '\n'
+class ScannerEnum(IntEnum):
 	eofSym  = 0
+-->scannerenum
 
+class Scanner:
 -->declarations
+	EOL     = '\n'
 
 	def __init__( self, s ):
 		self.buffer = Buffer( str(s) ) # the buffer instance
@@ -134,7 +137,7 @@ class Scanner(object):
 
 		node.next = self.NextToken( )
 		node = node.next
-		while node.kind != Scanner.eofSym:
+		while node.kind != ScannerEnum.eofSym:
 			node.next = self.NextToken( )
 			node = node.next
 
@@ -182,10 +185,10 @@ class Scanner(object):
 		done = False
 		while not done:
 			if state == -1:
-				self.t.kind = Scanner.eofSym     # NextCh already done
+				self.t.kind = ScannerEnum.eofSym     # NextCh already done
 				done = True
 			elif state == 0:
-				self.t.kind = Scanner.noSym      # NextCh already done
+				self.t.kind = ScannerEnum.noSym      # NextCh already done
 				done = True
 -->scan3
 		self.t.val = buf

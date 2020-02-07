@@ -37,10 +37,7 @@ class Trace(object):
 	def __init__(self, dir: Path) -> None:
 		assert isinstance(dir, Path)
 		self.fileName = dir / "trace.txt"
-		try:
-			self.trace = self.fileName.open("wt", encoding="utf-8")
-		except IOError:
-			raise RuntimeError("-- Compiler Error: could not open " + Trace.fileName)
+		self.trace = None
 
 	@staticmethod
 	def formatString(s: str, w: int) -> str:
@@ -71,11 +68,17 @@ class Trace(object):
 
 		self.trace.write("\n")
 
-	def Close(self) -> None:
-		self.trace.close()
-		stat = os.stat(str(Trace.fileName))
+	def __enter__(self):
+		try:
+			self.trace = self.fileName.open("wt", encoding="utf-8").__enter__()
+		except IOError:
+			raise RuntimeError("-- Compiler Error: could not open " + Trace.fileName)
+
+	def __exit__(self, *args, **kwargs) -> None:
+		self.trace.__exit__(*args, **kwargs)
+		stat = os.stat(str(self.fileName))
 		if stat.st_size == 0:
-			os.remove(Trace.fileName)
+			os.remove(self.fileName)
 		else:
 			print()
 			print("trace output is in", Trace.fileName.parent)

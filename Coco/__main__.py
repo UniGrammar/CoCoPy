@@ -104,22 +104,21 @@ class CocoCli(CocoArgs):
 			raise RuntimeError('-- Compiler Error: Cannot open file "%s"' % ATGName)
 
 		scanner = Scanner(strVal)
-		parser = Parser()
 
-		errors = Errors(fileName, self.outputDir, Tab.ddt[5], parser.getParsingPos, parser.errorMessages)
-		trace = Trace(self.outputDir)
+
 		tab = Tab()
-		dfa = DFA(fileName, dirName, self.outputDir)
+		pg = ParserGen(fileName, dirName, self.outputDir, tab.frameDir)
+		dg = DriverGen(fileName, dirName, self.outputDir, tab.frameDir)
 
-		CodeGenerator.sourceDir = dirName
-		CodeGenerator.frameDir = tab.frameDir
-		CodeGenerator.outputDir = self.outputDir
 
-		pg = ParserGen(fileName, dirName)
-		dg = DriverGen(fileName, dirName, self.outputDir)
-		parser.Parse(scanner)
-		errors.Summarize(scanner.buffer)
-		Trace.Close()
+		with Trace(self.outputDir) as trace:
+			dfa = DFA(fileName, dirName, self.outputDir, trace=trace)
+			parser = Parser(pg, trace=trace, dfa=dfa)
+			errors = Errors(fileName, self.outputDir, Tab.ddt[5], parser.getParsingPos, parser.errorMessages)
+
+			parser.Parse(scanner)
+			errors.Summarize(scanner.buffer)
+		
 		if errors.count != 0:
 			return 1
 

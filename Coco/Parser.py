@@ -28,7 +28,7 @@
 
 from .Errors import Errors
 from .CharClass import CharClass
-from .Core import Node, DFA, Graph, Symbol, Tab, Comment
+from .Core import Node, NodeKind, DFA, Graph, Symbol, Tab, Comment
 from .DriverGen import DriverGen
 from .ParserGen import ParserGen
 
@@ -39,8 +39,9 @@ from .Scanner import Token, Scanner, Position, ScannerEnum
 
 from .CLI import parseArgs
 
-from Coco.Core import Graph, Node, Symbol
-from Coco.Scanner import Position, Scanner
+from .Core import Graph, Node, Symbol
+from .Scanner import Position, Scanner
+from .Trace import Trace
 from typing import Set, Tuple, Union
 
 from enum import IntEnum
@@ -118,7 +119,7 @@ class Parser(object):
 	T = True
 	x = False
 
-	def __init__(self, pg: ParserGen) -> None:
+	def __init__(self, pg: ParserGen, trace: Trace, dfa: DFA) -> None:
 		self.scanner = None
 		self.token = None  # last recognized token
 		self.la = None  # lookahead token
@@ -127,6 +128,8 @@ class Parser(object):
 		self.noString = "-none-"  # used in declarations of literal tokens
 		self.errDist = ParserEnum.minErrDist
 		self.pg = pg
+		self.dfa = dfa
+		self.trace = trace
 
 	def getParsingPos(self) -> Tuple[int, int]:
 		return self.la.line, self.la.col
@@ -204,12 +207,12 @@ class Parser(object):
 			return self.StartOf(syFol)
 
 	def Coco(self) -> None:
-		g = Graph()
-		g1 = Graph()
-		g2 = Graph()
+		g = Graph(self.dfa)
+		g1 = Graph(self.dfa)
+		g2 = Graph(self.dfa)
 		s = set()
 		if self.la.kind == ScannerEnum.from_Sym or self.la.kind == ScannerEnum.import_Sym:
-			pg.usingPos = self.Imports()
+			self.pg.usingPos = self.Imports()
 		self.Expect(ScannerEnum.COMPILER_Sym)
 		self.genScanner = True
 		Tab.ignored = set()
@@ -222,7 +225,7 @@ class Parser(object):
 		Tab.semDeclPos = Position(self.scanner.buffer, beg, self.la.pos - beg, 0)
 		if self.la.kind == ScannerEnum.IGNORECASE_Sym:
 			self.Get()
-			DFA.ignoreCase = True
+			self.dfa.ignoreCase = True
 		if self.la.kind == ScannerEnum.CHARACTERS_Sym:
 			self.Get()
 			while self.la.kind == ScannerEnum.ident_Sym:
@@ -231,7 +234,7 @@ class Parser(object):
 		if self.la.kind == ScannerEnum.TOKENS_Sym:
 			self.Get()
 			while self.la.kind == ScannerEnum.ident_Sym or self.la.kind == ScannerEnum.string_Sym:
-				self.TokenDecl(Node.t)
+				self.TokenDecl(NodeKind.t)
 
 		if self.la.kind == ScannerEnum.NAMES_Sym:
 			self.Get()
@@ -241,7 +244,7 @@ class Parser(object):
 		if self.la.kind == ScannerEnum.PRAGMAS_Sym:
 			self.Get()
 			while self.la.kind == ScannerEnum.ident_Sym or self.la.kind == ScannerEnum.string_Sym:
-				self.TokenDecl(Node.pr)
+				self.TokenDecl(NodeKind.pr)
 
 		while self.la.kind == ScannerEnum.COMMENTS_Sym:
 			self.Get()
@@ -265,16 +268,16 @@ class Parser(object):
 			self.Get()
 		self.Expect(ScannerEnum.PRODUCTIONS_Sym)
 		if self.genScanner:
-			DFA.MakeDeterministic()
+			self.dfa.MakeDeterministic()
 		Graph.DeleteNodes()
 		while self.la.kind == ScannerEnum.ident_Sym:
 			self.Get()
 			sym = Symbol.Find(self.token.val)
 			undef = sym is None
 			if undef:
-				sym = Symbol(Node.nt, self.token.val, self.token.line)
+				sym = Symbol(NodeKind.nt, self.token.val, self.token.line)
 			else:
-				if sym.typ == Node.nt:
+				if sym.typ == NodeKind.nt:
 					if sym.graph is not None:
 						self.SemErr("name declared twice")
 				else:
@@ -308,7 +311,7 @@ class Parser(object):
 			sym = Tab.gramSy
 			if sym.attrPos is not None:
 				self.SemErr("grammar symbol must not have attributes")
-		Tab.noSym = Symbol(Node.t, "???", 0)  # noSym gets highest number
+		Tab.noSym = Symbol(NodeKind.t, "???", 0)  # noSym gets highest number
 		Tab.SetupAnys()
 		Tab.RenumberPragmas()
 		if Tab.ddt[2]:
@@ -321,18 +324,18 @@ class Parser(object):
 			if Tab.GrammarOk():
 				if not Tab.ddt[9]:
 					sys.stdout.write("parser")
-					pg.WriteParser(Tab.ddt[10])
+					self.pg.WriteParser(Tab.ddt[10])
 					if self.genScanner:
 						sys.stdout.write(" + scanner")
-						DFA.WriteScanner(Tab.ddt[10])
+						self.dfa.WriteScanner(Tab.ddt[10])
 						if Tab.ddt[0]:
-							DFA.PrintStates()
+							self.dfa.PrintStates()
 					if Tab.ddt[11]:
 						sys.stdout.write(" + driver")
 						DriverGen.WriteDriver()
 					sys.stdout.write(" generated\n")
 				if Tab.ddt[8]:
-					pg.WriteStatistics()
+					self.pg.WriteStatistics()
 		if Tab.ddt[6]:
 			Tab.PrintSymbolTable()
 		self.Expect(ScannerEnum.point_Sym)
@@ -437,7 +440,7 @@ class Parser(object):
 		s = self.Set()
 		if len(s) == 0:
 			self.SemErr("character set must not be empty")
-		c = CharClass(name, s)
+		c = CharClass(name, s, trace=self.trace)
 		self.Expect(ScannerEnum.point_Sym)
 
 	def TokenDecl(self, typ: int) -> None:
@@ -461,23 +464,23 @@ class Parser(object):
 				self.SemErr("a literal must not be declared with a structure")
 			Graph.Finish(g)
 			if (self.tokenString is None) or (self.tokenString == self.noString):
-				DFA.ConvertToStates(g.l, sym)
+				self.dfa.ConvertToStates(g.l, sym)
 			else:  # TokenExpr is a single string
 				if Tab.literals.get(self.tokenString) is not None:
 					self.SemErr("token string declared twice")
 				Tab.literals[self.tokenString] = sym
-				DFA.MatchLiteral(self.tokenString, sym)
+				self.dfa.MatchLiteral(self.tokenString, sym)
 
 		elif self.StartOf(5):
 			if kind == ParserEnum.id:
 				genScanner = False
 			else:
-				DFA.MatchLiteral(sym.name, sym)
+				self.dfa.MatchLiteral(sym.name, sym)
 		else:
 			self.SynErr(53)
 		if self.la.kind == ScannerEnum.lparenpoint_Sym:
 			sym.semPos = self.SemText()
-			if typ != Node.pr:
+			if typ != NodeKind.pr:
 				self.SemErr("semantic action not allowed here")
 
 	def NameDecl(self):
@@ -659,7 +662,7 @@ class Parser(object):
 			name = self.String()
 			if self.StartOf(21):
 				for i in range(0, len(name)):
-					if DFA.ignoreCase:
+					if self.dfa.ignoreCase:
 						s.add(ord(name[i].lower()))
 					else:
 						s.add(ord(name[i]))
@@ -668,7 +671,7 @@ class Parser(object):
 					self.SemErr("unacceptable character value")
 				else:
 					n1 = ord(name[0]) % mx
-				if DFA.ignoreCase and (n1 >= ord("A")) and (n1 <= ord("Z")):
+				if self.dfa.ignoreCase and (n1 >= ord("A")) and (n1 <= ord("Z")):
 					n1 += 32
 				self.Get()
 				if self.la.kind == ScannerEnum.string_Sym:
@@ -677,7 +680,7 @@ class Parser(object):
 						self.SemErr("unacceptable character value")
 					else:
 						n2 = ord(name[0]) % mx
-					if DFA.ignoreCase and ((n2 >= ord("A")) and (n2 <= ord("Z"))):
+					if self.dfa.ignoreCase and ((n2 >= ord("A")) and (n2 <= ord("Z"))):
 						n2 += 32
 				elif self.la.kind == ScannerEnum.CHR_Sym:
 					n2 = self.SingleChar(mx)
@@ -698,7 +701,7 @@ class Parser(object):
 						self.SemErr("unacceptable character value")
 					else:
 						n2 = ord(name[0]) % mx
-					if DFA.ignoreCase and ((n2 >= ord("A")) and (n2 <= ord("Z"))):
+					if self.dfa.ignoreCase and ((n2 >= ord("A")) and (n2 <= ord("Z"))):
 						n2 += 32
 				elif self.la.kind == ScannerEnum.CHR_Sym:
 					n2 = self.SingleChar(mx)
@@ -719,7 +722,7 @@ class Parser(object):
 	def String(self) -> str:
 		self.Expect(ScannerEnum.string_Sym)
 		name = self.token.val
-		name = DFA.Unescape(name[1:-1])
+		name = self.dfa.Unescape(name[1:-1])
 		return name
 
 	def SingleChar(self, mx: int) -> int:
@@ -730,7 +733,7 @@ class Parser(object):
 		n = int(self.token.val)
 		if n > (mx - 1):
 			self.SemErr("unacceptable character value")
-		if DFA.ignoreCase and ((n >= ord("A")) and (n <= ord("Z"))):
+		if self.dfa.ignoreCase and ((n >= ord("A")) and (n <= ord("Z"))):
 			n += 32
 		n %= mx
 		self.Expect(ScannerEnum.rparen_Sym)
@@ -747,7 +750,7 @@ class Parser(object):
 			self.Get()
 			kind = ParserEnum.str
 			name = '"' + self.token.val[1:-1] + '"'
-			if DFA.ignoreCase:
+			if self.dfa.ignoreCase:
 				name = name.lower()
 			if name.find(" ") >= 0:
 				self.SemErr("literal tokens must not contain blanks")
@@ -761,9 +764,9 @@ class Parser(object):
 		g = None
 		if self.StartOf(22):
 			if self.la.kind == ScannerEnum.IF_Sym:
-				rslv = Node(Node.rslv, None, self.la.line)
+				rslv = Node(NodeKind.rslv, None, self.la.line)
 				rslv.pos = self.Resolver()
-				g = Graph(rslv)
+				g = Graph(self.dfa, rslv)
 			g2 = self.Factor()
 			if rslv is not None:
 				Graph.MakeSequence(g, g2)
@@ -774,11 +777,11 @@ class Parser(object):
 				Graph.MakeSequence(g, g2)
 
 		elif self.StartOf(24):
-			g = Graph(Node(Node.eps, None, 0))
+			g = Graph(self.dfa, Node(NodeKind.eps, None, 0))
 		else:
 			self.SynErr(67)
 		if g is None:  # invalid start of Term
-			g = Graph(Node(Node.eps, None, 0))
+			g = Graph(Node(NodeKind.eps, None, 0))
 		return g
 
 	def Resolver(self) -> Position:
@@ -805,23 +808,23 @@ class Parser(object):
 			undef = sym is None
 			if undef:
 				if kind == ParserEnum.id:
-					sym = Symbol(Node.nt, name, 0)  # forward nt
+					sym = Symbol(NodeKind.nt, name, 0)  # forward nt
 				elif self.genScanner:
-					sym = Symbol(Node.t, name, self.token.line)
-					DFA.MatchLiteral(sym.name, sym)
+					sym = Symbol(NodeKind.t, name, self.token.line)
+					self.dfa.MatchLiteral(sym.name, sym)
 				else:  # undefined string in production
 					self.SemErr("undefined string in production")
 					sym = Tab.eofSy  # dummy
 			typ = sym.typ
-			if (typ != Node.t) and (typ != Node.nt):
+			if (typ != NodeKind.t) and (typ != NodeKind.nt):
 				self.SemErr("this symbol kind is not allowed in a production")
 			if weak:
-				if typ == Node.t:
-					typ = Node.wt
+				if typ == NodeKind.t:
+					typ = NodeKind.wt
 				else:
 					self.SemErr("only terminals may be weak")
 			p = Node(typ, sym, self.token.line)
-			g = Graph(p)
+			g = Graph(self.dfa, p)
 			if self.la.kind == ScannerEnum.less_Sym or self.la.kind == ScannerEnum.lesspoint_Sym:
 				self.Attribs(p)
 				if kind != ParserEnum.id:
@@ -847,21 +850,21 @@ class Parser(object):
 			Graph.MakeIteration(g)
 		elif self.la.kind == ScannerEnum.lparenpoint_Sym:
 			pos = self.SemText()
-			p = Node(Node.sem, None, 0)
+			p = Node(NodeKind.sem, None, 0)
 			p.pos = pos
-			g = Graph(p)
+			g = Graph(self.dfa, p)
 		elif self.la.kind == ScannerEnum.ANY_Sym:
 			self.Get()
-			p = Node(Node.any, None, 0)  # p.set is set in Tab.SetupAnys
+			p = Node(NodeKind.any, None, 0)  # p.set is set in Tab.SetupAnys
 			g = Graph(p)
 		elif self.la.kind == ScannerEnum.SYNC_Sym:
 			self.Get()
-			p = Node(Node.sync, None, 0)
-			g = Graph(p)
+			p = Node(NodeKind.sync, None, 0)
+			g = Graph(self.dfa, p)
 		else:
 			self.SynErr(68)
 		if g is None:  # invalid start of Factor
-			g = Graph(Node(Node.eps, None, 0))
+			g = Graph(self.dfa, Node(NodeKind.eps, None, 0))
 		return g
 
 	def Attribs(self, n: Node) -> None:
@@ -1007,9 +1010,9 @@ class Parser(object):
 					if c is None:
 						self.SemErr("undefined name " + name)
 						c = CharClass(name, set())
-				p = Node(Node.clas, None, 0)
+				p = Node(NodeKind.clas, None, 0)
 				p.val = c.n
-				g = Graph(p)
+				g = Graph(self.dfa, p)
 				self.tokenString = self.noString
 			else:  # str
 				g = Graph.StrToGraph(name)
@@ -1034,7 +1037,7 @@ class Parser(object):
 		else:
 			self.SynErr(76)
 		if g is None:  # invalid start of TokenFactor
-			g = Graph(Node(Node.eps, None, 0))
+			g = Graph(self.dfa, Node(NodeKind.eps, None, 0))
 		return g
 
 	def Parse(self, scanner: Scanner) -> None:

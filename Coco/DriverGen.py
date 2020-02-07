@@ -42,8 +42,6 @@ class DriverGen(object):
 	srcDir = ""  # directory of attributed grammar file
 	outDir = ""  # directory of attributed grammar file
 
-	codeGen = CodeGenerator()
-
 	def WriteDriver(self):
 		fr = str(Tab.gramSy.name + ".frame")
 		fn = Tab.gramSy.name + ".py"
@@ -56,10 +54,11 @@ class DriverGen(object):
 		self.codeGen.close()
 		os.chmod(__class__.outDir / fn, 0o755)
 
-	def __init__(self, f: str, dir: Path, outDir: Path) -> None:
+	def __init__(self, f: str, dir: Path, outDir: Path, frameDir: Path) -> None:
 		assert isinstance(f, str)
 		assert isinstance(dir, Path)
 		assert isinstance(outDir, Path)
 		self.srcName = f
 		self.srcDir = dir
 		self.outDir = outDir
+		self.codeGen = CodeGenerator(self.srcDir, self.outDir, frameDir)
