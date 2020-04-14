@@ -1,5 +1,4 @@
-CocoPy
-====== 
+# CocoPy
 [![PyPi Status](https://img.shields.io/pypi/v/CocoPy.svg)](https://pypi.python.org/pypi/CocoPy)
 [![TravisCI Build Status](https://travis-ci.org/KOLANICH/CocoPy.svg?branch=master)](https://travis-ci.org/KOLANICH/CoCoPy)
 [![Libraries.io Status](https://img.shields.io/librariesio/github/KOLANICH/CoCoPy.svg)](https://libraries.io/github/KOLANICH/CoCoPy)
@@ -19,7 +18,7 @@ This is a fork of CocoPy-1.1.0rc (http://pypi.python.org/pypi/CocoPy/) of
 Ronald Longo, since it unmaintained.
 
 
-!!!PLEASE NOTE!!!
+**!!!PLEASE NOTE!!!**
 This distribution is a release candidate.
 
 Setup and usage information can be found in section 3 of
@@ -29,7 +28,7 @@ use Coco for Python.
 This file contains a list of the contents of the distribution and a
 development roadmap.
 
-CONTENTS OF THIS DISTRIBUTION
+### CONTENTS OF THIS DISTRIBUTION
 
 This distribution of Coco includes the following:
 
@@ -107,40 +106,35 @@ This distribution of Coco includes the following:
          >>> python cocopTester.py
 ```
 
-ROADMAP
+### ROADMAP
 
    - Version numbering is tentative.
 
 
-Release#   Goal
---------   ------------------------------------------------------
-1.0.10b2.  Coco now bootstraps correctly.
+### Releases
+-------- 
+**1.0.10b2.**  Coco now bootstraps correctly.
 
-1.1.0rc.   *** Release Candidate -- Coco now successfully runs the test suite
-           from the C# implementation.
+**1.1.0rc.**  Release Candidate -- Coco now successfully runs the test suite from the C# implementation.
 
-1.1.1rc.   Coco now correctly parses the examples and reports all the errors
+**1.1.1rc.**   Coco now correctly parses the examples and reports all the errors
            in the example grammars.
 
-1.1.2rc.   Code generated from examples now sucessfully loads into python
-           using 'python name.py'
+**1.1.2rc.**  Code generated from examples now sucessfully loads into python using `python name.py`
 
-1.1.3rc    Code generated from examples now successfully parses input
-           and generates errors when appropriate.
+**1.1.3rc**    Code generated from examples now successfully parses input and generates errors when appropriate.
 
-1.2.0.     *** Final -- No bugs reported or found for some (as yet
-           undetermined) period of time (e.g. 3 months).
+**1.2.0.**     Final -- No bugs reported or found for some (as yet undetermined) period of time (e.g. 3 months).
 
-1.2.x.     Various bug fix releases
+**1.2.x.**    Various bug fix releases
 
-1.3.0.     Coco is now updated to equivalence of the latest Java & C#
-           implementations.
+**1.3.0. **    Coco is now updated to equivalence of the latest Java & C# implementations.
 
-2.0.0.     *** Enhancements -- Incorporated various enhancements
-           - get rid of all the static code
-           - Improve indentation of generated code (currently much is
-             hardcoded).  Should be more flexible to user's preference.
+**2.0.0.**    Enhancements 
+- Incorporated various enhancements
+- get rid of all the static code
+- Improve indentation of generated code (currently much is hardcoded).  Should be more flexible to user's preference.
 
 
-As I move Coco towards a final release I also want to continuously update
-and refine the documentation.
+*As I move Coco towards a final release I also want to continuously update
+and refine the documentation.*
