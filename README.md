@@ -113,24 +113,23 @@ This distribution of Coco includes the following:
 
 ### Releases
 -------- 
-**1.0.10b2.**  Coco now bootstraps correctly.
+**1.0.10b2**  Coco now bootstraps correctly.
 
-**1.1.0rc.**  Release Candidate -- Coco now successfully runs the test suite from the C# implementation.
+**1.1.0rc**  Release Candidate -- Coco now successfully runs the test suite from the C# implementation.
 
-**1.1.1rc.**   Coco now correctly parses the examples and reports all the errors
-           in the example grammars.
+**1.1.1rc**   Coco now correctly parses the examples and reports all the errors in the example grammars.
 
-**1.1.2rc.**  Code generated from examples now sucessfully loads into python using `python name.py`
+**1.1.2rc**  Code generated from examples now sucessfully loads into python using `python name.py`
 
 **1.1.3rc**    Code generated from examples now successfully parses input and generates errors when appropriate.
 
-**1.2.0.**     Final -- No bugs reported or found for some (as yet undetermined) period of time (e.g. 3 months).
+**1.2.0**     Final -- No bugs reported or found for some (as yet undetermined) period of time (e.g. 3 months).
 
-**1.2.x.**    Various bug fix releases
+**1.2.x**    Various bug fix releases
 
-**1.3.0. **    Coco is now updated to equivalence of the latest Java & C# implementations.
+**1.3.0**    Coco is now updated to equivalence of the latest Java & C# implementations.
 
-**2.0.0.**    Enhancements 
+**2.0.0**    Enhancements 
 - Incorporated various enhancements
 - get rid of all the static code
 - Improve indentation of generated code (currently much is hardcoded).  Should be more flexible to user's preference.
