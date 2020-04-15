@@ -112,7 +112,6 @@ This distribution of Coco includes the following:
 
 
 ### Releases
--------- 
 **1.0.10b2**  Coco now bootstraps correctly.
 
 **1.1.0rc**  Release Candidate -- Coco now successfully runs the test suite from the C# implementation.
